@@ -77,22 +77,12 @@ function CustomRenderer() {
           <GambaUi.PortalTarget target="error" />
           {ready && <GambaUi.PortalTarget target="screen" />}
 
-          <MetaControls>
-            <IconButton onClick={() => setInfo(true)}><Icon.Info /></IconButton>
-            <IconButton onClick={() => setProvablyFair(true)}><Icon.Fairness /></IconButton>
-            <IconButton onClick={() => soundStore.set(soundStore.volume ? 0 : .5)}>
-              {soundStore.volume ? <Icon.Volume /> : <Icon.VolumeMuted />}
-            </IconButton>
-          </MetaControls>
+          {/* MetaControls hidden - removed bottom utility bar */}
         </Screen>
 
         <LoadingBar />
 
-        {/* ← No inner wrapper—controls & play buttons are centered by Controls */}
-        <Controls>
-          <GambaUi.PortalTarget target="controls" />
-          <GambaUi.PortalTarget target="play" />
-        </Controls>
+        {/* Controls hidden - removed bottom blue container */}
       </Container>
     </>
   )
@@ -109,7 +99,6 @@ export default function Game() {
       ) : (
         <h1>Game not found! 👎</h1>
       )}
-      <GameSlider />
     </>
   )
 }

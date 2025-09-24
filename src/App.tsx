@@ -5,18 +5,41 @@ import { GambaUi } from 'gamba-react-ui-v2'
 import { useTransactionError } from 'gamba-react-v2'
 
 import { Modal } from './components/Modal'
+import { ChatBox } from './components/ChatBox'
 import { TOS_HTML, ENABLE_TROLLBOX } from './constants'
 import { useToast } from './hooks/useToast'
 import { useUserStore } from './hooks/useUserStore'
+import { ChatVisibilityProvider } from './hooks/useChatVisibility'
 
 import Dashboard from './sections/Dashboard/Dashboard'
 import Game from './sections/Game/Game'
 import Header from './sections/Header'
-import RecentPlays from './sections/RecentPlays/RecentPlays'
+import CoinflipRecentPlays from './sections/RecentPlays/CoinflipRecentPlays'
 import Toasts from './sections/Toasts'
 import TrollBox from './components/TrollBox'
 
 import { MainWrapper, TosInner, TosWrapper } from './styles'
+import { useChatVisibility } from './hooks/useChatVisibility'
+import styled from 'styled-components'
+
+/* -------------------------------------------------------------------------- */
+/* Styled Components                                                          */
+/* -------------------------------------------------------------------------- */
+
+const ResponsiveMainWrapper = styled(MainWrapper)<{ $isChatVisible: boolean }>`
+  /* Mobile: Always no left margin since chat is hidden */
+  @media (max-width: 1023px) {
+    margin-left: 0 !important;
+  }
+  
+  @media (min-width: 1024px) {
+    margin-left: ${props => props.$isChatVisible ? '350px' : '0'};
+  }
+
+  @media (min-width: 1920px) {
+    margin-left: ${props => props.$isChatVisible ? '350px' : '0'};
+  }
+`
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -48,12 +71,13 @@ function ErrorHandler() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* App                                                                        */
+/* App Content                                                                */
 /* -------------------------------------------------------------------------- */
 
-export default function App() {
+function AppContent() {
   const newcomer = useUserStore((s) => s.newcomer)
   const set      = useUserStore((s) => s.set)
+  const { isChatVisible } = useChatVisibility()
 
   return (
     <>
@@ -76,8 +100,11 @@ export default function App() {
 
       <Header />
       <Toasts />
+      
+      {/* Chat Box - Fixed position on left side */}
+      <ChatBox className="chat-box" />
 
-      <MainWrapper>
+      <ResponsiveMainWrapper $isChatVisible={isChatVisible}>
         <Routes>
           {/* Normal landing page always shows Dashboard (with optional inline game) */}
           <Route path="/"          element={<Dashboard />} />
@@ -85,11 +112,21 @@ export default function App() {
           <Route path="/:gameId"   element={<Game />} />
         </Routes>
 
-        <h2 style={{ textAlign: 'center' }}>Recent Plays</h2>
-        <RecentPlays />
-      </MainWrapper>
+      </ResponsiveMainWrapper>
 
       {ENABLE_TROLLBOX && <TrollBox />}
     </>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* App                                                                        */
+/* -------------------------------------------------------------------------- */
+
+export default function App() {
+  return (
+    <ChatVisibilityProvider>
+      <AppContent />
+    </ChatVisibilityProvider>
   )
 }

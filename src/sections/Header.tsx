@@ -125,12 +125,31 @@ const LogoSection = styled.div`
   align-items: center;
   height: 110px;
   padding: 0 24px;
-  background: #141414;
+  background: 
+    linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)),
+    url('/peter-rovder-X_5kMOSxLzw-unsplash.jpg') center/cover no-repeat;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   width: auto;
   flex-shrink: 0;
   z-index: 1003;
   border-right: 1px solid #000000;
   border-bottom: 1px solid #1D1D1D;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: 
+      linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)),
+      url('/peter-rovder-X_5kMOSxLzw-unsplash.jpg') center/cover no-repeat;
+    filter: blur(15px);
+    z-index: -1;
+  }
 
   @media (min-width: 1024px) {
     width: 350px;

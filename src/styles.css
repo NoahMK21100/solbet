@@ -33,7 +33,9 @@ h1, h2 {
 }
 
 body {
-  background: var(--background-color);
+  background: 
+    linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)),
+    url('/peter-rovder-X_5kMOSxLzw-unsplash.jpg') center/cover no-repeat fixed;
   color: var(--text-color);
   cursor: default;
   margin: 0;
@@ -103,7 +105,7 @@ div.wallet-adapter-modal-overlay div.wallet-adapter-modal-wrapper,
   min-height: 400px !important;
   max-height: 70vh !important;
   border-radius: 16px !important;
-  background: #1a1a1a !important;
+  background: #0f0f0f url('/background_shadows.webp') center/cover no-repeat !important;
   padding: 0 !important;
   overflow: hidden !important;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8) !important;
@@ -447,6 +449,29 @@ div.wallet-adapter-modal-overlay .wallet-adapter-modal-button,
   max-height: 70vh !important;
   min-height: 400px !important;
   margin: 0 !important;
+}
+
+/* Left Side Chat Box */
+.chat-box {
+  position: fixed !important;
+  left: 0px !important;
+  top: 110px !important;
+  width: 350px !important;
+  height: calc(100vh - 110px) !important;
+  z-index: 35 !important;
+  background-color: rgb(20, 20, 20) !important;
+  border-right: 1px solid rgb(29, 29, 29) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  font-family: 'Flama', sans-serif !important;
+  color: white !important;
+}
+
+/* Hide chat on mobile devices */
+@media (max-width: 1023px) {
+  .chat-box {
+    display: none !important;
+  }
 }
 
 /* Clean modal styling without gradient borders */

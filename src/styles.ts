@@ -11,28 +11,43 @@ export const MainWrapper = styled.div`
   flex-direction: column;
   gap: 20px;
   margin-top: 70px; /* Main header only on mobile */
-  background: var(--background-color);
+  background: transparent; /* Remove background to show body background */
   min-height: calc(100vh - 70px);
+  
+  /* Mobile: No left margin since chat is hidden */
+  @media (max-width: 1023px) {
+    margin-left: 0;
+  }
   
   @media (min-width: 1024px) {
     margin-top: 110px; /* Logo container (110px total height) */
     min-height: calc(100vh - 110px);
     padding: 20px 1.5rem;
+    width: 1200px; /* Fixed width - wider */
+    margin-left: 350px; /* Start after chat box */
+    margin-right: 0; /* No right margin */
+    position: relative;
+    left: calc((100vw - 350px - 1200px) / 2); /* Center within remaining space */
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   @media (min-width: 1920px) {
     margin-top: 110px; /* Logo container (110px total height) - same as 1024px for 1920x1080 */
     min-height: calc(100vh - 110px);
     padding: 20px 1.5rem;
+    width: 1200px; /* Fixed width - wider */
+    margin-left: 350px; /* Start after chat box */
+    margin-right: 0; /* No right margin */
+    position: relative;
+    left: calc((100vw - 350px - 1200px) / 2); /* Center within remaining space */
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   @media (min-width: 600px) {
     padding: 20px 1.5rem;
-    width: 1000px;
   }
   @media (min-width: 1280px) {
     padding: 20px 1.5rem;
-    width: 1100px;
   }
 `
 

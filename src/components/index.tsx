@@ -33,3 +33,6 @@ export const Flex = styled.div<{gap?: number}>`
   display: flex;
   gap: ${props => props.gap ?? 10}px;
 `
+
+// Export ChatBox component
+export { ChatBox } from './ChatBox'

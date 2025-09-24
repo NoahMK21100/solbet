@@ -17,6 +17,7 @@ export const Container = styled.div`
   position: relative;
   display: grid;
   gap: 5px;
+  background: transparent; /* Ensure container is transparent */
 `
 
 export const SettingControls = styled.div`
@@ -50,12 +51,13 @@ export const Splash = styled.div`
 export const Screen = styled.div`
   position: relative;
   flex-grow: 1;
-  background: #0c0c11;
+  background: transparent; /* Make transparent */
   border-radius: 10px;
-  overflow: hidden;
+  overflow: visible; /* Allow content to overflow */
   transition: height .2s ease;
-  height: 600px;
-  @media (max-width: 700px) { height: 600px; }
+  min-height: auto; /* Remove fixed height */
+  height: auto; /* Allow height to grow with content */
+  @media (max-width: 700px) { height: auto; }
 `
 
 export const IconButton = styled.button`
