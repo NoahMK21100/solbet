@@ -108,7 +108,10 @@ export function UserButton() {
         </div>
       ) : (
         <GambaUi.Button onClick={connect}>
-          {wallet.connecting ? 'Connecting' : 'Connect'}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <i className="fi fi-rr-wallet" style={{ fontSize: '16px', width: '16px', height: '16px' }}></i>
+            {wallet.connecting ? 'Connecting' : 'Connect'}
+          </div>
         </GambaUi.Button>
       )}
     </>

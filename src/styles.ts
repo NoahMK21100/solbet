@@ -10,7 +10,20 @@ export const MainWrapper = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
-  margin-top: 60px;
+  margin-top: 70px; /* Main header only on mobile */
+  background: var(--background-color);
+  min-height: calc(100vh - 70px);
+  
+  @media (min-width: 1024px) {
+    margin-top: 110px; /* Logo container (110px total height) */
+    min-height: calc(100vh - 110px);
+  }
+
+  @media (min-width: 1920px) {
+    margin-top: 110px; /* Logo container (110px total height) - same as 1024px for 1920x1080 */
+    min-height: calc(100vh - 110px);
+  }
+
   @media (min-width: 600px) {
     padding: 20px;
     width: 1000px;
