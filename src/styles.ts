@@ -6,7 +6,7 @@ export const MainWrapper = styled.div`
   max-width: 100%;
   transition: width .25s ease, padding .25s ease;
   margin: 0 auto;
-  padding: 10px;
+  padding: 20px 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -17,19 +17,21 @@ export const MainWrapper = styled.div`
   @media (min-width: 1024px) {
     margin-top: 110px; /* Logo container (110px total height) */
     min-height: calc(100vh - 110px);
+    padding: 20px 1.5rem;
   }
 
   @media (min-width: 1920px) {
     margin-top: 110px; /* Logo container (110px total height) - same as 1024px for 1920x1080 */
     min-height: calc(100vh - 110px);
+    padding: 20px 1.5rem;
   }
 
   @media (min-width: 600px) {
-    padding: 20px;
+    padding: 20px 1.5rem;
     width: 1000px;
   }
   @media (min-width: 1280px) {
-    padding: 20px;
+    padding: 20px 1.5rem;
     width: 1100px;
   }
 `
