@@ -5,6 +5,7 @@ import {
   useGambaPlatformContext,
   useUserBalance,
 } from 'gamba-react-ui-v2'
+import { motion } from 'framer-motion'
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import styled from 'styled-components'
@@ -15,6 +16,16 @@ import { useMediaQuery } from '../hooks/useMediaQuery'
 import TokenSelect from './TokenSelect'
 import { UserButton } from './UserButton'
 import { ENABLE_LEADERBOARD } from '../constants'
+
+// Simple clean movement animation
+const logoAnimation = {
+  y: [0, -2, 0],
+  transition: { 
+    duration: 2, 
+    repeat: Infinity, 
+    ease: "easeInOut" as const 
+  }
+}
 
 const TopStrip = styled.div`
   position: fixed;
@@ -123,8 +134,9 @@ const LogoSection = styled.div`
   left: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
   height: 110px;
-  padding: 0 24px;
+  padding: 0 32px;
   background: 
     linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)),
     url('/peter-rovder-X_5kMOSxLzw-unsplash.jpg') center/cover no-repeat;
@@ -164,24 +176,50 @@ const LogoSection = styled.div`
   }
 `
 
-const Logo = styled(NavLink)`
+const Logo = styled(motion.div)`
   display: flex;
   align-items: center;
   text-decoration: none;
   color: white;
-  font-weight: bold;
-  font-size: 18px;
+  font-family: 'Airstrike', sans-serif;
+  font-weight: 400;
+  font-size: 2rem;
+  gap: 0.5rem;
 
   @media (min-width: 640px) {
-    font-size: 20px;
+    font-size: 2.25rem;
   }
 
   @media (min-width: 1024px) {
-    font-size: 24px;
+    font-size: 2.5rem;
   }
 
   @media (min-width: 1920px) {
-    font-size: 30px;
+    font-size: 2.75rem;
+  }
+`
+
+const LogoLink = styled(NavLink)`
+  text-decoration: none;
+  color: inherit;
+`
+
+const LogoImage = styled(motion.img)`
+  height: 100px;
+  width: auto;
+  object-fit: contain;
+  cursor: pointer;
+
+  @media (min-width: 640px) {
+    height: 104px;
+  }
+
+  @media (min-width: 1024px) {
+    height: 108px;
+  }
+
+  @media (min-width: 1920px) {
+    height: 112px;
   }
 `
 
@@ -405,8 +443,15 @@ export default function Header() {
       <MainHeader>
         {/* Logo Section */}
         <LogoSection>
-          <Logo to="/">
-            SOLBET
+          <Logo animate={logoAnimation}>
+            <LogoImage 
+              src="/logosolbet.png" 
+              alt="Solbet Logo"
+              animate={logoAnimation}
+            />
+            <LogoLink to="/">
+              SOLBET
+            </LogoLink>
           </Logo>
         </LogoSection>
 
@@ -427,6 +472,13 @@ export default function Header() {
                 >
                   <img src="/001-coin.png" alt="Coinflip" style={{ width: '24px', height: '24px' }} />
                   Coinflip
+                </NavLinkStyled>
+                <NavLinkStyled
+                  to="/blackjack"
+                  className={currentPath === '/blackjack' ? 'active' : ''}
+                >
+                  <img src="/games/blackjack.png" alt="Blackjack" style={{ width: '24px', height: '24px' }} />
+                  Blackjack
                 </NavLinkStyled>
                 <NavLinkStyled
                   to="/affiliates"

@@ -3,16 +3,26 @@ import { GambaUi, useSound } from 'gamba-react-ui-v2'
 import { useGamba } from 'gamba-react-v2'
 import { useWallet } from '@solana/wallet-adapter-react'
 import React, { useState } from 'react'
-import styled from 'styled-components'
+import { 
+  GameListHeader, AllGamesTitle, SortControls, SortByLabel, SortValue, SortDropdownContainer, ArrowContainer, SortDropdown, DropdownOption, GameContainer,
+  GameCreationSection, GameHeader, GameSubtitle, GameTitle, GameControls, LeftSection, RightSection, BetAndButtonsGroup, BetInputAndButtons, CoinsAndCreateGroup, RightControls, BetAmountSection, BetLabel, SolanaIcon, BetInputWrapper, BetInput, CurrencyDropdown, USDTooltip, QuickBetButtons, QuickBetButtonContainer, QuickBetButton, ChooseSideSection, SideButtons, SideButton, CreateGameButton,
+  GameListSection, GameEntries, GameEntry, PlayerInfo, PlayerAvatar, PlayerName, PlayerLevel, WinnerCoinIcon, VsIcon, BetAmountDisplay, JoinButton, StatusButton, EyeIcon, WinningAmount, ViewGameButton,
+  ModalOverlay, ModalParent, TransactionModal, ModalTitle, GameInterface, PlayersRow, PlayerSection, PlayerSlot, PlayerAvatarContainer, PlayerAvatarModal, PlayerNumber, PlayerInfoModal, PlayerNameModal, NameLevelContainer, BetAmountModal, BetAmountContainer, BetAmountText, SolanaIconModal, CoinSideIndicator, CoinSideIcon, CoinContainer, GameActions, GameInfo, InfoTextContainer, InfoText, ShareButton,
+  ModalHeader, ModalMain, ModalFooter, CallBotButtonContainer, CallBotButton, CallBotButtonWrapper, ThreeColumnLayout, PlayerColumn, CoinColumn,
+  GameResultModalOverlay, GameResultModalParent, GameResultModal, GameResultHeader, GameResultTitle, GameResultMain, GameResultThreeColumnLayout, GameResultPlayerColumn, GameResultPlayerSlot, GameResultPlayerAvatarContainer, GameResultPlayerAvatar, GameResultPlayerInfo, GameResultPlayerName, GameResultPlayerLevel, GameResultBetAmount, GameResultBetAmountText, GameResultWinningAmount, GameResultCoinColumn, GameResultCoinContainer, GameResultCoinDisplay, GameResultWinnerText, GameResultFooter, GameResultFairnessButton, GameResultHashInfo, GameResultHashText
+} from './styles'
+import { Dropdown } from '../../components/Dropdown'
 import { Coin, TEXTURE_HEADS, TEXTURE_TAILS } from './Coin'
+import HEADS_IMAGE from './purple.png'
+import TAILS_IMAGE from './black.png'
+import UNKNOWN_IMAGE from './unknown.webp'
 import { Effect } from './Effect'
 import { GameViewModal } from '../../components/GameViewModal'
 
 import SOUND_COIN from './coin.mp3'
 import SOUND_LOSE from './lose.mp3'
 import SOUND_WIN from './win.mp3'
-import HEADS_IMAGE from './purple.png'
-import TAILS_IMAGE from './black.png'
+import SOLANA_ICON from '/solana.png'
 
 const SIDES = {
   heads: [2, 0],
@@ -21,1003 +31,6 @@ const SIDES = {
 
 type Side = keyof typeof SIDES
 
-// Main Container
-const GameContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  padding: 2rem;
-  background: transparent;
-  color: white;
-  font-family: 'Flama', sans-serif;
-  position: relative;
-  overflow: hidden;
-  max-width: 1200px;
-  margin: 0 auto;
-  min-height: calc(100vh - 110px); /* Full height minus header */
-`
-
-// Game Creation Section
-const GameCreationSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  position: relative;
-  z-index: 1;
-`
-
-const GameHeader = styled.div`
-  text-align: left;
-  margin-right: 2rem;
-`
-
-const GameSubtitle = styled.p`
-  font-size: 1rem;
-  color: #aaa;
-  margin: 0.5rem 0 0 0;
-  font-family: 'Flama', sans-serif;
-  font-weight: 500;
-  padding-left: 0.5rem;
-`
-
-const GameTitle = styled.h1`
-  font-family: 'Airstrike', sans-serif;
-  font-size: 3rem;
-  font-weight: 900;
-  letter-spacing: 0.1em;
-  color: white;
-  margin: 0;
-  text-transform: uppercase;
-`
-
-const GameControls = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: nowrap;
-  justify-content: space-between;
-  width: 100%;
-`
-
-const BetAmountSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  align-items: center;
-`
-
-const BetLabel = styled.label`
-  font-size: 0.75rem;
-  color: #ccc;
-  font-weight: 600;
-  font-family: 'Flama', sans-serif;
-  white-space: nowrap;
-`
-
-const BetInputWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  background: #2a2a2a;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1px solid #3a3a3a;
-  position: relative;
-  gap: 0.5rem;
-`
-
-const BetInput = styled.input`
-  flex-grow: 1;
-  padding: 0.5rem 0.75rem;
-  background: none;
-  border: none;
-  color: white;
-  font-size: 0.875rem;
-  font-family: 'Flama', sans-serif;
-  outline: none;
-  width: 80px;
-  
-  &::placeholder {
-    color: #666;
-  }
-`
-
-const CurrencyDropdown = styled.select`
-  padding: 0.5rem 0.75rem;
-  background: #3a3a3a;
-  border: none;
-  color: white;
-  font-size: 0.875rem;
-  font-family: 'Flama', sans-serif;
-  outline: none;
-  cursor: pointer;
-`
-
-const USDTooltip = styled.div`
-  position: absolute;
-  top: -20px;
-  right: 0;
-  background: rgba(0, 0, 0, 0.8);
-  color: #ccc;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-family: 'Flama', sans-serif;
-  white-space: nowrap;
-`
-
-const QuickBetButtons = styled.div`
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  margin-left: 0.5rem;
-  width: 132px;
-  height: 44px;
-  /* Transparent top container */
-`
-
-const QuickBetButtonContainer = styled.div`
-  background-color: #2a2a2a;
-  border: 1px solid #1D1D1D;
-  border-radius: 8px;
-  padding: 0.125rem;
-  /* Darker middle container around each button */
-`
-
-const QuickBetButton = styled.button`
-  height: 38px;
-  padding: 0 0.75rem;
-  background-color: #3a3a3a;
-  color: white;
-  border: 1px solid #1D1D1D;
-  border-radius: 6px;
-  font-family: 'Flama', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 700;
-  line-height: 1.25rem;
-  text-shadow: rgba(0, 0, 0, 0.5) 0px 2px;
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-  overflow: hidden;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter, backdrop-filter;
-  transition-duration: 0.3s;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  
-  /* Radial gradient overlay for hover effect */
-  &::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    z-index: 1;
-    height: 100%;
-    width: 100%;
-    background-image: radial-gradient(68.53% 169.15% at 50% -27.56%, #666 0%, #3a3a3a 100%);
-    opacity: 0;
-    mix-blend-mode: screen;
-    transition-property: opacity;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 0.5s;
-    border-radius: 10px;
-  }
-  
-  &:hover::after {
-    opacity: 1;
-  }
-  
-  /* Ensure text is above overlay */
-  & > * {
-    position: relative;
-    z-index: 2;
-  }
-  
-  /* Shiny highlight on top */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
-    border-radius: 0.75rem 0.75rem 0 0;
-    z-index: 2;
-  }
-  
-  &:hover {
-    transform: translateY(-1px);
-  }
-  
-  &:active {
-    transform: translateY(0);
-    box-shadow: 
-      0 1px 2px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-  }
-`
-
-const ChooseSideSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  align-items: center;
-  padding: 0;
-  margin: 0 0.5rem;
-`
-
-const SideButtons = styled.div`
-  display: flex;
-  gap: 0.5rem;
-  justify-content: center;
-  align-items: center;
-  padding: 0;
-  margin: 0;
-`
-
-const SideButton = styled.button<{ selected: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 60px;
-  height: 60px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  position: relative;
-  padding: 0;
-  margin: 0;
-  
-  img {
-    width: 80px;
-    height: 80px;
-    margin: -10px;
-    border-radius: 50%;
-    transition: all 0.3s ease;
-    transform-origin: center;
-    filter: ${props => props.selected ? 'brightness(1) saturate(1)' : 'brightness(0.4) saturate(0.3)'};
-    cursor: pointer;
-    
-    &:hover {
-      transform: scale(1.05) rotateY(180deg);
-    }
-  }
-`
-
-const CreateGameButton = styled.button`
-  padding: 0.75rem 1.25rem;
-  background-color: #6741ff;
-  color: white;
-  border: 1px solid #1D1D1D;
-  border-radius: 10px;
-  font-family: 'Flama', sans-serif;
-  font-size: 0.875rem;
-  font-weight: 700;
-  line-height: 1.25rem;
-  text-shadow: rgba(0, 0, 0, 0.5) 0px 2px;
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-  overflow: hidden;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter, backdrop-filter;
-  transition-duration: 0.3s;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-  
-  /* Radial gradient overlay for hover effect */
-  &::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    z-index: 1;
-    height: 100%;
-    width: 100%;
-    background-image: radial-gradient(68.53% 169.15% at 50% -27.56%, #d787ff 0%, #6741ff 100%);
-    opacity: 0;
-    mix-blend-mode: screen;
-    transition-property: opacity;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 0.5s;
-    border-radius: 10px;
-  }
-  
-  &:hover::after {
-    opacity: 1;
-  }
-  
-  /* Ensure text is above overlay */
-  & > * {
-    position: relative;
-    z-index: 2;
-  }
-  
-  /* Shiny highlight on top */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
-    border-radius: 0.75rem 0.75rem 0 0;
-    z-index: 2;
-  }
-  
-  &:hover {
-    transform: translateY(-1px);
-  }
-  
-  &:active {
-    transform: translateY(0);
-    box-shadow: 
-      0 1px 2px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-  }
-
-  &:disabled {
-    background: #555;
-    cursor: not-allowed;
-    opacity: 0.7;
-  }
-`
-
-// Game List Section
-const GameListSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-top: 2rem;
-  position: relative;
-  z-index: 1;
-  background: transparent; /* Keep transparent - no dark background behind entire section */
-  flex: 1; /* Take up remaining space */
-`
-
-const GameListHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid #3a3a3a;
-`
-
-const AllGamesTitle = styled.h2`
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: white;
-  margin: 0;
-  font-family: 'Flama', sans-serif;
-`
-
-const SortDropdown = styled.select`
-  padding: 0.5rem 0.75rem;
-  background: #2a2a2a;
-  border: 1px solid #3a3a3a;
-  border-radius: 6px;
-  color: white;
-  font-family: 'Flama', sans-serif;
-  font-size: 0.875rem;
-  outline: none;
-  cursor: pointer;
-`
-
-const GameEntries = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-`
-
-const GameEntry = styled.div<{ $isActive?: boolean; $isCompleted?: boolean }>`
-  display: flex;
-  align-items: center;
-  background: ${props => 
-    props.$isActive ? 'radial-gradient(circle at center, rgba(103, 65, 255, 0.3) 0%, #2a2a2a 70%)' : /* Radial purple glow for active games */
-    props.$isCompleted ? 'rgba(42, 42, 42, 0.7)' : 
-    '#2a2a2a'
-  };
-  border: 1px solid ${props => 
-    props.$isActive ? '#3a3a3a' : /* Grey border for active games */
-    props.$isCompleted ? '#3a3a3a' : 
-    '#3a3a3a'
-  };
-  border-radius: 10px;
-  padding: 0.75rem 1rem;
-  gap: 1rem;
-  color: white;
-  font-size: 0.875rem;
-  font-weight: 500;
-  font-family: 'Flama', sans-serif;
-  text-shadow: rgba(0, 0, 0, 0.5) 0px 2px;
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-  overflow: hidden;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter, backdrop-filter;
-  transition-duration: 0.3s;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  
-  /* Radial gradient overlay for hover effect */
-  &::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    z-index: 1;
-    height: 100%;
-    width: 100%;
-    background-image: radial-gradient(68.53% 169.15% at 50% -27.56%, #d787ff 0%, #6741ff 100%);
-    opacity: 0;
-    mix-blend-mode: screen;
-    transition-property: opacity;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 0.5s;
-    border-radius: 10px;
-  }
-  
-  &:hover::after {
-    opacity: 1;
-  }
-  
-  /* Shiny highlight on top */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
-    border-radius: 0.75rem 0.75rem 0 0;
-    z-index: 2;
-  }
-  
-  &:hover {
-    transform: translateY(-1px);
-  }
-  
-  &:active {
-    transform: translateY(0);
-    box-shadow: 
-      0 1px 2px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-  }
-  
-  /* Grey out completed games and their contents */
-  ${props => props.$isCompleted && `
-    opacity: 0.6;
-    filter: grayscale(0.3);
-    
-    * {
-      opacity: 0.8;
-    }
-  `}
-`
-
-const PlayerInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-`
-
-const PlayerAvatar = styled.div<{ $isWinner?: boolean; $isLoser?: boolean }>`
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: ${props => props.$isLoser ? '#333' : '#555'};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  color: ${props => props.$isLoser ? '#666' : 'white'};
-  font-weight: 600;
-  font-family: 'Flama', sans-serif;
-  border: ${props => props.$isWinner ? '2px solid #8a6cff' : 'none'};
-  position: relative;
-  opacity: ${props => props.$isLoser ? 0.5 : 1};
-`
-
-const PlayerName = styled.span`
-  font-weight: 600;
-  font-family: 'Flama', sans-serif;
-`
-
-const PlayerLevel = styled.span`
-  background: #6741ff;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: white;
-  font-family: 'Flama', sans-serif;
-`
-
-const WinnerCoinIcon = styled.div`
-  position: absolute;
-  bottom: -2px;
-  right: -2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #8a6cff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #fff;
-  
-  img {
-    width: 8px;
-    height: 8px;
-  }
-`
-
-const VsIcon = styled.img`
-  width: 24px;
-  height: 24px;
-  filter: brightness(0.8);
-`
-
-const BetAmountDisplay = styled.span`
-  font-weight: 700;
-  color: #42ff78;
-  font-family: 'Flama', sans-serif;
-  text-align: center;
-`
-
-const JoinButton = styled.button`
-  padding: 0.75rem 1.25rem;
-  background-color: #6741ff;
-  color: white;
-  border: 1px solid #1D1D1D;
-  border-radius: 10px;
-  font-family: 'Flama', sans-serif;
-  font-size: 0.875rem;
-  font-weight: 700;
-  line-height: 1.25rem;
-  text-shadow: rgba(0, 0, 0, 0.5) 0px 2px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-  overflow: hidden;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter, backdrop-filter;
-  transition-duration: 0.3s;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  
-  /* Radial gradient overlay for hover effect */
-  &::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    z-index: 1;
-    height: 100%;
-    width: 100%;
-    background-image: radial-gradient(68.53% 169.15% at 50% -27.56%, #d787ff 0%, #6741ff 100%);
-    opacity: 0;
-    mix-blend-mode: screen;
-    transition-property: opacity;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 0.5s;
-    border-radius: 10px;
-  }
-  
-  &:hover::after {
-    opacity: 1;
-  }
-  
-  /* Ensure text is above overlay */
-  & > * {
-    position: relative;
-    z-index: 2;
-  }
-  
-  /* Shiny highlight on top */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
-    border-radius: 0.75rem 0.75rem 0 0;
-    z-index: 2;
-  }
-  
-  &:hover {
-    transform: translateY(-1px);
-  }
-  
-  &:active {
-    transform: translateY(0);
-    box-shadow: 
-      0 1px 2px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-  }
-
-  &:disabled {
-    background: #555;
-    cursor: not-allowed;
-    opacity: 0.7;
-  }
-`
-
-const StatusButton = styled.button<{ status: string }>`
-  background: ${props => 
-    props.status === 'in-play' ? '#42ff78' : 
-    props.status === 'waiting' ? '#6741ff' : 
-    props.status === 'completed-win' ? '#42ff78' :
-    props.status === 'completed-lose' ? '#ff4242' : '#666'
-  };
-  border: none;
-  border-radius: 8px;
-  padding: 0.75rem 1.5rem;
-  color: ${props => props.status === 'waiting' ? 'white' : '#000'};
-  font-size: 0.875rem;
-  font-weight: 600;
-  font-family: 'Flama', sans-serif;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  
-  &:hover {
-    opacity: 0.8;
-    transform: translateY(-1px);
-  }
-`
-
-const EyeIcon = styled.img`
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  margin-left: 0.5rem;
-`
-
-const WinningAmount = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #42ff78;
-  font-family: 'Flama', sans-serif;
-  text-align: center;
-  min-width: 120px;
-  
-  .amount {
-    font-size: 1.5rem;
-    font-weight: 900;
-  }
-  
-  .label {
-    font-size: 0.75rem;
-    color: #aaa;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-`
-
-const ViewGameButton = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0.75rem 1.25rem;
-  background-color: #6741ff;
-  color: white;
-  border: 1px solid #1D1D1D;
-  border-radius: 10px;
-  font-family: 'Flama', sans-serif;
-  font-size: 0.875rem;
-  font-weight: 700;
-  line-height: 1.25rem;
-  text-shadow: rgba(0, 0, 0, 0.5) 0px 2px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-  overflow: hidden;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter, backdrop-filter;
-  transition-duration: 0.3s;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  
-  /* Radial gradient overlay for hover effect */
-  &::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    z-index: 1;
-    height: 100%;
-    width: 100%;
-    background-image: radial-gradient(68.53% 169.15% at 50% -27.56%, #d787ff 0%, #6741ff 100%);
-    opacity: 0;
-    mix-blend-mode: screen;
-    transition-property: opacity;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 0.5s;
-    border-radius: 10px;
-  }
-  
-  &:hover::after {
-    opacity: 1;
-  }
-  
-  /* Ensure content is above overlay */
-  & > * {
-    position: relative;
-    z-index: 2;
-  }
-  
-  /* Shiny highlight on top */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
-    border-radius: 0.75rem 0.75rem 0 0;
-    z-index: 2;
-  }
-  
-  &:hover {
-    transform: translateY(-1px);
-  }
-  
-  &:active {
-    transform: translateY(0);
-    box-shadow: 
-      0 1px 2px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-  }
-  
-  img {
-    width: 20px;
-    height: 20px;
-  }
-`
-
-// Transaction Modal Components
-const ModalOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  padding: 20px;
-  box-sizing: border-box;
-`
-
-const TransactionModal = styled.div`
-  background: #1a1a1a;
-  border-radius: 16px;
-  padding: 2rem;
-  max-width: 600px;
-  width: 100%;
-  position: relative;
-  border: 1px solid #333;
-  
-  @media (max-width: 768px) {
-    max-width: 90vw;
-    padding: 1.5rem;
-  }
-`
-
-const ModalTitle = styled.h2`
-  color: white;
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0 0 2rem 0;
-  font-family: 'Flama', sans-serif;
-  text-align: center;
-  
-  @media (max-width: 768px) {
-    font-size: 1.25rem;
-  }
-`
-
-const GameInterface = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2rem;
-`
-
-const PlayersRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-  width: 100%;
-  justify-content: space-between;
-  
-  @media (max-width: 768px) {
-    gap: 1rem;
-  }
-`
-
-const PlayerSection = styled.div`
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  justify-content: flex-start;
-`
-
-const PlayerSlot = styled.div<{ isWaiting?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-  position: relative;
-  opacity: ${props => props.isWaiting ? 0.6 : 1};
-  
-  @media (max-width: 768px) {
-    gap: 0.5rem;
-  }
-`
-
-const PlayerAvatarModal = styled.div<{ isBot?: boolean }>`
-  width: 80px;
-  height: 80px;
-  border-radius: 16px;
-  background: ${props => props.isBot ? '#6741ff' : '#42ff78'};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
-  position: relative;
-  border: 2px solid ${props => props.isBot ? '#8a6cff' : '#5ae66a'};
-  
-  @media (max-width: 768px) {
-    width: 60px;
-    height: 60px;
-    font-size: 1.5rem;
-  }
-`
-
-const PlayerNumber = styled.div`
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #333;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 700;
-  font-family: 'Flama', sans-serif;
-  
-  @media (max-width: 768px) {
-    width: 20px;
-    height: 20px;
-    font-size: 0.625rem;
-  }
-`
-
-const PlayerInfoModal = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-`
-
-const PlayerNameModal = styled.span`
-  color: white;
-  font-size: 1rem;
-  font-weight: 600;
-  font-family: 'Flama', sans-serif;
-  
-  @media (max-width: 768px) {
-    font-size: 0.875rem;
-  }
-`
-
-const BetAmountModal = styled.span`
-  color: #888;
-  font-size: 0.875rem;
-  font-family: 'Flama', sans-serif;
-  
-  @media (max-width: 768px) {
-    font-size: 0.75rem;
-  }
-`
-
-const CoinContainer = styled.div`
-  width: 100px;
-  height: 100px;
-  position: relative;
-  
-  @media (max-width: 768px) {
-    width: 80px;
-    height: 80px;
-  }
-`
-
-const GameActions = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  width: 100%;
-`
-
-
-const GameInfo = styled.div`
-  background: #0f0f0f;
-  border-radius: 8px;
-  padding: 1rem;
-  width: 100%;
-  margin-top: 1rem;
-  
-  @media (max-width: 768px) {
-    padding: 0.75rem;
-  }
-`
-
-const InfoText = styled.p`
-  color: #888;
-  font-size: 0.75rem;
-  margin: 0.25rem 0;
-  font-family: 'Flama', sans-serif;
-  word-break: break-all;
-  
-  @media (max-width: 768px) {
-    font-size: 0.625rem;
-  }
-`
-
-const ShareButton = styled.button`
-  background: #333;
-  border: 1px solid #555;
-  border-radius: 8px;
-  padding: 0.5rem 1rem;
-  color: white;
-  font-size: 0.875rem;
-  font-family: 'Flama', sans-serif;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-top: 1rem;
-  
-  &:hover {
-    background: #444;
-  }
-  
-  @media (max-width: 768px) {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.75rem;
-  }
-`
 
 // Real platform games will be fetched from API
 const PLATFORM_GAMES: any[] = []
@@ -1027,23 +40,53 @@ function Flip() {
   const gamba = useGamba()
   const { publicKey } = useWallet()
   const [side, setSide] = useState<Side>('heads')
+  const [creatorSide, setCreatorSide] = useState<Side>('heads') // Track the original creator's side
+  
+  // Debug: Log image sources
+  console.log('HEADS_IMAGE:', HEADS_IMAGE)
+  console.log('TAILS_IMAGE:', TAILS_IMAGE)
+  console.log('Current side:', side)
+  console.log('Creator side:', creatorSide)
   const [wager, setWager] = useState(0) // Start with blank/zero
   const [currency, setCurrency] = useState<'SOL' | 'FAKE'>('SOL')
   const [games, setGames] = useState<any[]>([])
   const [userGames, setUserGames] = useState<any[]>([])
   const [platformGames, setPlatformGames] = useState<any[]>([])
   const [showTransactionModal, setShowTransactionModal] = useState(false)
+  const [isModalVisible, setIsModalVisible] = useState(false)
   const [gameState, setGameState] = useState<'waiting' | 'playing' | 'completed' | 'joining'>('waiting')
   const [isSpinning, setIsSpinning] = useState(false)
   const [gameId, setGameId] = useState(() => Math.floor(Math.random() * 1000000))
-  const [hashedSeed] = useState('a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6')
+  // Get RNG seed from Gamba for proper hash generation
+  const hashedSeed = gamba.nextRngSeedHashed || 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6'
   const [showGameViewModal, setShowGameViewModal] = useState(false)
   const [selectedGameForView, setSelectedGameForView] = useState<any>(null)
+  const [showGameResultModal, setShowGameResultModal] = useState(false)
+  const [selectedGameResult, setSelectedGameResult] = useState<any>(null)
   const [forceUpdate, setForceUpdate] = useState(0)
+  const [coinVisualResult, setCoinVisualResult] = useState<0 | 1>(0) // 0 = heads, 1 = tails
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [dropdownVisible, setDropdownVisible] = useState(false)
+  const dropdownRef = React.useRef<HTMLDivElement>(null)
+  
+  // Close dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownVisible && dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownVisible(false)
+      }
+    }
+    
+    if (dropdownVisible) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [dropdownVisible])
   
   // Mock SOL price for USD conversion (0.001 SOL ≈ $0.21)
-  const solPrice = 210 // $210 per SOL
-  const usdAmount = wager * solPrice
 
   const sounds = useSound({
     coin: SOUND_COIN,
@@ -1165,6 +208,9 @@ function Flip() {
         // NOW show the modal after payment
         setShowTransactionModal(true)
         setGameState('waiting')
+        setIsSpinning(false)
+        // Trigger transition after modal is mounted
+        setTimeout(() => setIsModalVisible(true), 10)
         
         console.log('Game created and paid for, ready for Call Bot:', { side, wager, newGameId, currency })
         
@@ -1187,6 +233,9 @@ function Flip() {
         // Show modal for FAKE games
         setShowTransactionModal(true)
         setGameState('waiting')
+        setIsSpinning(false)
+        // Trigger transition after modal is mounted
+        setTimeout(() => setIsModalVisible(true), 10)
         
         console.log('FAKE game created, ready for Call Bot:', { side, wager, newGameId, currency })
       }
@@ -1198,6 +247,7 @@ function Flip() {
       setIsSpinning(false)
     }
   }
+
 
   const callBot = async () => {
     try {
@@ -1219,13 +269,17 @@ function Flip() {
           const randomSeed = gameId + Date.now()
           const coinResult = (randomSeed % 2) === 0 ? 'heads' : 'tails'
           const win = coinResult === side // You win if the coin matches your selection
-          
-          console.log('SOL game result:', { 
-            coinResult, 
-            yourSelection: side, 
-            win, 
+
+          // Set visual result: show the side player chose if they win, opposite if they lose
+          const visualResult = win ? (side === 'heads' ? 0 : 1) : (side === 'heads' ? 1 : 0)
+
+          console.log('SOL game result:', {
+            coinResult,
+            yourSelection: side,
+            win,
         wager,
             randomSeed,
+            visualResult,
             comparison: `${coinResult} === ${side} = ${coinResult === side}`
       })
 
@@ -1235,6 +289,7 @@ function Flip() {
 
             setGameState('completed')
             setIsSpinning(false)
+            setCoinVisualResult(visualResult)
 
             // Update the game in the list
             const updatedGame = {
@@ -1260,12 +315,6 @@ function Flip() {
             
             // Force UI update
             setForceUpdate(prev => prev + 1)
-            
-            // Reset Gamba state to fix stuck "Creating..." button
-            setTimeout(() => {
-              // Force a re-render to reset gamba.isPlaying state
-              window.dispatchEvent(new Event('gamba-reset'))
-            }, 100)
 
       if (win) {
         sounds.play('win')
@@ -1280,9 +329,13 @@ function Flip() {
           // Handle transaction timeout/expiration
           setTimeout(() => {
             sounds.play('coin')
-            
+
             setGameState('completed')
             setIsSpinning(false)
+
+            // Player loses due to transaction failure, so show opposite side
+            const visualResult = side === 'heads' ? 1 : 0
+            setCoinVisualResult(visualResult)
             
             // Mark as failed/lost due to transaction error
             const updatedGame = {
@@ -1319,20 +372,25 @@ function Flip() {
           const randomSeed = gameId + Date.now()
           const coinResult = (randomSeed % 2) === 0 ? 'heads' : 'tails'
           const win = coinResult === side // You win if the coin matches your selection
-          
-                console.log('FAKE game result:', { 
-                  coinResult, 
-                  yourSelection: side, 
-                  win, 
-                  wager, 
+
+          // Set visual result: show the side player chose if they win, opposite if they lose
+          const visualResult = win ? (side === 'heads' ? 0 : 1) : (side === 'heads' ? 1 : 0)
+
+                console.log('FAKE game result:', {
+                  coinResult,
+                  yourSelection: side,
+                  win,
+                  wager,
                   randomSeed,
+                  visualResult,
                   comparison: `${coinResult} === ${side} = ${coinResult === side}`
                 })
-          
+
           sounds.play('coin')
 
           setGameState('completed')
           setIsSpinning(false)
+          setCoinVisualResult(visualResult)
 
           // Update the game in the list
           const updatedGame = {
@@ -1358,12 +416,6 @@ function Flip() {
           
                 // Force UI update
                 setForceUpdate(prev => prev + 1)
-                
-                // Reset Gamba state to fix stuck "Creating..." button
-                setTimeout(() => {
-                  // Force a re-render to reset gamba.isPlaying state
-                  window.dispatchEvent(new Event('gamba-reset'))
-                }, 100)
 
                 if (win) {
                   sounds.play('win')
@@ -1401,12 +453,15 @@ function Flip() {
       // Set up the game for joining
       setWager(gameToJoin.amount)
       setSide(gameToJoin.player1.side === 'heads' ? 'tails' : 'heads') // Opposite side
+      setCreatorSide(gameToJoin.player1.side) // Set the creator's original side
       setCurrency(gameToJoin.currency) // Use the same currency as the game
       setGameId(gameId)
       
       // Show modal for joining
       setShowTransactionModal(true)
       setGameState('joining')
+      // Trigger transition after modal is mounted
+      setTimeout(() => setIsModalVisible(true), 10)
       
       console.log('Joining game:', { gameId, amount: gameToJoin.amount, side: gameToJoin.player1.side === 'heads' ? 'tails' : 'heads' })
       
@@ -1419,7 +474,7 @@ function Flip() {
     try {
       setGameState('playing')
       setIsSpinning(true)
-      
+
       sounds.play('coin', { playbackRate: .5 })
 
       if (currency === 'FAKE') {
@@ -1430,20 +485,25 @@ function Flip() {
           const randomSeed = gameId + Date.now()
           const coinResult = (randomSeed % 2) === 0 ? 'heads' : 'tails'
           const win = coinResult === side // You win if the coin matches your selection
-          
-          console.log('Join game result (FAKE):', { 
-            coinResult, 
-            yourSelection: side, 
-            win, 
-            wager, 
+
+          // Set visual result: show the side player chose if they win, opposite if they lose
+          const visualResult = win ? (side === 'heads' ? 0 : 1) : (side === 'heads' ? 1 : 0)
+
+          console.log('Join game result (FAKE):', {
+            coinResult,
+            yourSelection: side,
+            win,
+        wager,
             randomSeed,
+            visualResult,
             comparison: `${coinResult} === ${side} = ${coinResult === side}`
-          })
-          
-          sounds.play('coin')
+      })
+
+      sounds.play('coin')
 
           setGameState('completed')
           setIsSpinning(false)
+          setCoinVisualResult(visualResult)
 
           // Update the game in user's games list
           const updatedGame = {
@@ -1465,11 +525,6 @@ function Flip() {
           // Save the updated game to database
           saveGame(updatedGame)
           
-          // Reset Gamba state to fix stuck "Creating..." button
-          setTimeout(() => {
-            // Force a re-render to reset gamba.isPlaying state
-            window.dispatchEvent(new Event('gamba-reset'))
-          }, 100)
 
           if (win) {
             sounds.play('win')
@@ -1493,13 +548,17 @@ function Flip() {
           // Get the result after spinning
           game.result().then((result: any) => {
             const win = result.payout > wagerInLamports
-            
-            console.log('Join game result (SOL):', { result, win, payout: result.payout, wager: wagerInLamports })
-            
+
+            // Set visual result: show the side player chose if they win, opposite if they lose
+            const visualResult = win ? (side === 'heads' ? 0 : 1) : (side === 'heads' ? 1 : 0)
+
+            console.log('Join game result (SOL):', { result, win, payout: result.payout, wager: wagerInLamports, visualResult })
+
             sounds.play('coin')
 
             setGameState('completed')
             setIsSpinning(false)
+            setCoinVisualResult(visualResult)
 
             // Update the game in user's games list
             const updatedGame = {
@@ -1522,11 +581,11 @@ function Flip() {
             // Save the updated game to database
             saveGame(updatedGame)
 
-            if (win) {
-              sounds.play('win')
-            } else {
-              sounds.play('lose')
-            }
+      if (win) {
+        sounds.play('win')
+      } else {
+        sounds.play('lose')
+      }
           })
         }, 2000) // 2 second spin animation
       }
@@ -1539,19 +598,41 @@ function Flip() {
   }
 
   const closeModal = () => {
-    setShowTransactionModal(false)
-    setGameState('waiting')
-    setIsSpinning(false)
+    // Start transition out
+    setIsModalVisible(false)
+    // Close modal after transition completes
+    setTimeout(() => {
+      setShowTransactionModal(false)
+      setGameState('waiting')
+      setIsSpinning(false)
+      setCoinVisualResult(0)
+    }, 500)
+    
+    // Reset Gamba state to allow new game creation
+    setTimeout(() => {
+      setForceUpdate(prev => prev + 1)
+      window.dispatchEvent(new Event('gamba-reset'))
+    }, 100)
   }
 
   const viewGame = (gameEntry: any) => {
-    setSelectedGameForView(gameEntry)
-    setShowGameViewModal(true)
+    if (gameEntry.status === 'completed') {
+      setSelectedGameResult(gameEntry)
+      setShowGameResultModal(true)
+    } else {
+      setSelectedGameForView(gameEntry)
+      setShowGameViewModal(true)
+    }
   }
 
   const closeGameViewModal = () => {
     setShowGameViewModal(false)
     setSelectedGameForView(null)
+  }
+
+  const closeGameResultModal = () => {
+    setShowGameResultModal(false)
+    setSelectedGameResult(null)
   }
 
 
@@ -1560,75 +641,121 @@ function Flip() {
       <GameContainer>
         <GameCreationSection>
           <GameControls>
-            <GameHeader>
-              <GameSubtitle>Pick a side and flip</GameSubtitle>
+            <LeftSection>
               <GameTitle>Coinflip</GameTitle>
-            </GameHeader>
+            </LeftSection>
 
-            <BetAmountSection>
-              <BetLabel>
-                Bet Amount {currency === 'SOL' ? `(~$${usdAmount.toFixed(2)})` : `(${currency})`}
-              </BetLabel>
-              <BetInputWrapper>
-                <BetInput
-                  type="number"
-                  defaultValue=""
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value);
-                    setWager(isNaN(value) ? 0 : value);
+            <RightSection>
+              <BetAndButtonsGroup>
+                <BetLabel>
+                  Bet Amount
+                </BetLabel>
+                
+                <BetInputAndButtons>
+                  <BetAmountSection>
+                    <BetInputWrapper>
+                      <GambaUi.WagerInput value={wager} onChange={setWager} />
+                    </BetInputWrapper>
+                  </BetAmountSection>
+
+                  <QuickBetButtons>
+                    <QuickBetButtonContainer>
+                      <QuickBetButton onClick={() => setWager(w => (w || 0) + 0.01)}>
+                        +0.01
+                      </QuickBetButton>
+                    </QuickBetButtonContainer>
+                    <QuickBetButtonContainer>
+                      <QuickBetButton onClick={() => setWager(w => (w || 0) + 1)}>
+                        +1
+                      </QuickBetButton>
+                    </QuickBetButtonContainer>
+                  </QuickBetButtons>
+                </BetInputAndButtons>
+              </BetAndButtonsGroup>
+
+              <CoinsAndCreateGroup>
+                <ChooseSideSection>
+                  <SideButtons>
+                    <SideButton selected={side === 'heads'} onClick={() => {
+                      setSide('heads')
+                      setCreatorSide('heads') // Update creator side when selecting
+                    }}>
+                      <img src={HEADS_IMAGE} alt="Heads" />
+                    </SideButton>
+                    <SideButton selected={side === 'tails'} onClick={() => {
+                      setSide('tails')
+                      setCreatorSide('tails') // Update creator side when selecting
+                    }}>
+                      <img src={TAILS_IMAGE} alt="Tails" />
+                    </SideButton>
+                  </SideButtons>
+                </ChooseSideSection>
+
+                <CreateGameButton 
+                  onClick={() => {
+                    console.log('Create Game button clicked:', { 
+                      gameState, 
+                      wager, 
+                      currency, 
+                      side,
+                      disabled: gameState === 'playing' || gameState === 'completed'
+                    })
+                    if (gameState !== 'playing' && gameState !== 'completed') {
+                      createGame()
+                    }
+                  }} 
+                  disabled={gameState === 'playing' || gameState === 'completed'}
+                  style={{ 
+                    pointerEvents: gameState === 'playing' || gameState === 'completed' ? 'none' : 'auto',
+                    zIndex: 10
                   }}
-                  placeholder="0.01"
-                  step="0.001"
-                  min="0"
-                />
-                <CurrencyDropdown value={currency} onChange={(e) => setCurrency(e.target.value as 'SOL' | 'FAKE')}>
-                  <option value="SOL">SOL</option>
-                  <option value="FAKE">FAKE</option>
-                </CurrencyDropdown>
-                {currency === 'SOL' && <USDTooltip>≈ ${usdAmount.toFixed(2)}</USDTooltip>}
-              </BetInputWrapper>
-            </BetAmountSection>
+                >
+                  {gameState === 'playing' || gameState === 'completed' ? 'Creating...' : 'Create Game'}
+                </CreateGameButton>
 
-            <QuickBetButtons>
-              <QuickBetButtonContainer>
-                <QuickBetButton onClick={() => setWager(w => w + 0.1)}>
-                  +0.1
-                </QuickBetButton>
-              </QuickBetButtonContainer>
-              <QuickBetButtonContainer>
-                <QuickBetButton onClick={() => setWager(w => w + 1)}>
-                  +1
-                </QuickBetButton>
-              </QuickBetButtonContainer>
-            </QuickBetButtons>
-
-            <ChooseSideSection>
-              <BetLabel>Choose Side</BetLabel>
-              <SideButtons>
-                <SideButton selected={side === 'heads'} onClick={() => setSide('heads')}>
-                  <img src={HEADS_IMAGE} alt="Heads" />
-                </SideButton>
-                <SideButton selected={side === 'tails'} onClick={() => setSide('tails')}>
-                  <img src={TAILS_IMAGE} alt="Tails" />
-                </SideButton>
-              </SideButtons>
-            </ChooseSideSection>
-
-            <CreateGameButton onClick={createGame} disabled={gamba.isPlaying}>
-              {gamba.isPlaying ? 'Creating...' : 'Create Game'}
-            </CreateGameButton>
+              </CoinsAndCreateGroup>
+            </RightSection>
           </GameControls>
+          
+          <GameSubtitle>Pick a side and flip</GameSubtitle>
         </GameCreationSection>
 
         <GameListSection>
           <GameListHeader>
-            <AllGamesTitle>ALL GAMES {userGames.length + platformGames.length}</AllGamesTitle>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              <SortDropdown>
-                <option>Sort By: Highest Price</option>
-                <option>Sort By: Lowest Price</option>
-              </SortDropdown>
-            </div>
+            <AllGamesTitle>ALL GAMES <span style={{ color: 'white', fontSize: '1rem', fontWeight: '700', marginLeft: '0.5rem' }}>{userGames.length + platformGames.length}</span></AllGamesTitle>
+            <SortControls>
+              <SortByLabel>SORT BY:</SortByLabel>
+              <SortDropdownContainer ref={dropdownRef} onClick={() => setDropdownVisible(prev => !prev)}>
+                <SortValue 
+                  style={{ cursor: 'pointer' }}
+                >
+                  {sortOrder === 'desc' ? 'Highest Price' : 'Lowest Price'}
+                </SortValue>
+                <ArrowContainer>
+                  <SortDropdown 
+                    $sortOrder={dropdownVisible ? (sortOrder === 'desc' ? 'asc' : 'desc') : sortOrder}
+                  />
+                </ArrowContainer>
+                <Dropdown visible={dropdownVisible}>
+                  <DropdownOption 
+                    onClick={() => {
+                      setSortOrder('desc')
+                      setDropdownVisible(false)
+                    }}
+                  >
+                    Highest Price
+                  </DropdownOption>
+                  <DropdownOption 
+                    onClick={() => {
+                      setSortOrder('asc')
+                      setDropdownVisible(false)
+                    }}
+                  >
+                    Lowest Price
+                  </DropdownOption>
+                </Dropdown>
+              </SortDropdownContainer>
+            </SortControls>
           </GameListHeader>
           <GameEntries>
             {/* Combine and sort all games - active games first, then last 20 finished games */}
@@ -1728,13 +855,16 @@ function Flip() {
                       
                       {/* Center - Bet Amount */}
                       <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                        <BetAmountDisplay>{gameEntry.amount} {gameEntry.currency || 'SOL'}</BetAmountDisplay>
+                        <BetAmountDisplay>
+                          <img src="/sol-coin-lg-DNgZ-FVD.webp" alt="Solana" style={{ width: '48px', height: '48px' }} />
+                          {gameEntry.amount}
+                        </BetAmountDisplay>
                       </div>
                       
                       {/* Right side - Action buttons */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '0 0 auto' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flex: '0 0 auto' }}>
                         {gameEntry.status === 'waiting' ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
                             {gameEntry.player1.name === 'You' ? (
                               // If you own the game, show "Resume" button to reopen your game
                               <JoinButton 
@@ -1742,10 +872,13 @@ function Flip() {
                                   // Reopen your own game modal - NO PAYMENT NEEDED
                                   setWager(gameEntry.amount)
                                   setSide(gameEntry.player1.side)
+                                  setCreatorSide(gameEntry.player1.side) // Set creator's side
                                   setCurrency(gameEntry.currency)
                                   setGameId(gameEntry.id)
                                   setShowTransactionModal(true)
                                   setGameState('waiting') // Already paid, just waiting for bot/player
+                                  // Trigger transition after modal is mounted
+                                  setTimeout(() => setIsModalVisible(true), 10)
                                   
                                   // Clear any old transaction state
                                   console.log('Resuming game - ready for Call Bot')
@@ -1763,13 +896,14 @@ function Flip() {
                             </ViewGameButton>
                           </div>
                         ) : gameEntry.status === 'completed' ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
                             <WinningAmount>
-                              <div className="amount">
-                                {gameEntry.result === 'win' ? `+${(gameEntry.amount * 2).toFixed(4)}` : `-${gameEntry.amount.toFixed(4)}`}
-                              </div>
                               <div className="label">
-                                {gameEntry.result === 'win' ? 'WON' : 'LOST'}
+                                <img 
+                                  src={gameEntry.coinResult === 'heads' ? HEADS_IMAGE : TAILS_IMAGE} 
+                                  alt={gameEntry.coinResult || 'coin'} 
+                                  style={{ width: '48px', height: '48px' }}
+                                />
                               </div>
                             </WinningAmount>
                             <ViewGameButton onClick={() => viewGame(gameEntry)}>
@@ -1777,7 +911,7 @@ function Flip() {
                             </ViewGameButton>
                           </div>
                         ) : gameEntry.status === 'in-play' ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
                             <ViewGameButton onClick={() => viewGame(gameEntry)}>
                               <img src="/001-view.png" alt="Watch Live" />
                             </ViewGameButton>
@@ -1805,192 +939,315 @@ function Flip() {
         />
       )}
 
+      {/* Game Result Modal */}
+      {showGameResultModal && selectedGameResult && (
+        <GameResultModalOverlay onClick={closeGameResultModal}>
+          <GameResultModalParent onClick={(e) => e.stopPropagation()}>
+            <GameResultModal>
+              {/* X BUTTON AT TOP */}
+              <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 10 }}>
+                <button 
+                  onClick={closeGameResultModal} 
+                  style={{ 
+                    background: 'rgb(48, 48, 48)', 
+                    border: 'none', 
+                    borderRadius: '0.5rem',
+                    width: '42px',
+                    height: '40px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 5px #0000001f, inset 0 2px #ffffff12, inset 0 -2px #0000003d',
+                    transition: 'all 0.25s ease',
+                    transform: 'translateY(0)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <img src="/001-close.png" alt="Close" style={{ width: '12px', height: '12px' }} />
+                </button>
+              </div>
+              
+              {/* HEADER SECTION */}
+              <GameResultHeader>
+                <GameResultTitle>
+                  <img src="/002-weapon.png" alt="Weapon" style={{ width: '20px', height: '20px', marginRight: '0.5rem' }} />
+                  COINFLIP
+                </GameResultTitle>
+              </GameResultHeader>
+
+              {/* MAIN SECTION - 3 COLUMN LAYOUT */}
+              <GameResultMain>
+                <GameResultThreeColumnLayout>
+                  {/* LEFT COLUMN - Player 1 */}
+                  <GameResultPlayerColumn>
+                    <GameResultPlayerSlot>
+                      <GameResultPlayerAvatarContainer>
+                        <GameResultPlayerAvatar isWinner={selectedGameResult.result === 'win'}>
+                          {selectedGameResult.player1.avatar}
+                        </GameResultPlayerAvatar>
+                      </GameResultPlayerAvatarContainer>
+                      <GameResultPlayerInfo>
+                        <GameResultPlayerName>{selectedGameResult.player1.name}</GameResultPlayerName>
+                        <GameResultPlayerLevel>{selectedGameResult.player1.level}</GameResultPlayerLevel>
+                        <GameResultBetAmount>
+                          {selectedGameResult.currency === 'SOL' && <img src="/solana.png" alt="Solana" style={{ width: '16px', height: '16px' }} />}
+                          <GameResultBetAmountText>{selectedGameResult.currency === 'SOL' ? 'Ξ' : 'FAKE'} {selectedGameResult.amount}</GameResultBetAmountText>
+                        </GameResultBetAmount>
+                      </GameResultPlayerInfo>
+                    </GameResultPlayerSlot>
+                  </GameResultPlayerColumn>
+
+                  {/* MIDDLE COLUMN - Coin Result */}
+                  <GameResultCoinColumn>
+                    <GameResultCoinContainer>
+                      <GameResultCoinDisplay>
+                        {selectedGameResult.coinResult === 'heads' ? 'H' : 'T'}
+                      </GameResultCoinDisplay>
+                      <GameResultWinnerText>
+                        {selectedGameResult.result === 'win' ? selectedGameResult.player1.name : selectedGameResult.player2?.name || 'BOT'}
+                        <br />
+                        WON
+                      </GameResultWinnerText>
+                    </GameResultCoinContainer>
+                  </GameResultCoinColumn>
+
+                  {/* RIGHT COLUMN - Player 2 */}
+                  <GameResultPlayerColumn>
+                    <GameResultPlayerSlot>
+                      <GameResultPlayerAvatarContainer>
+                        <GameResultPlayerAvatar isWinner={selectedGameResult.result === 'lose'}>
+                          {selectedGameResult.player2?.avatar || '🤖'}
+                        </GameResultPlayerAvatar>
+                      </GameResultPlayerAvatarContainer>
+                      <GameResultPlayerInfo>
+                        <GameResultPlayerName>{selectedGameResult.player2?.name || 'Bot'}</GameResultPlayerName>
+                        <GameResultPlayerLevel>{selectedGameResult.player2?.level || '999'}</GameResultPlayerLevel>
+                        <GameResultWinningAmount isWinner={selectedGameResult.result === 'lose'}>
+                          {selectedGameResult.currency === 'SOL' && <img src="/solana.png" alt="Solana" style={{ width: '16px', height: '16px' }} />}
+                          <GameResultBetAmountText>{selectedGameResult.currency === 'SOL' ? 'Ξ' : 'FAKE'} {selectedGameResult.result === 'lose' ? (selectedGameResult.amount * 2).toFixed(4) : selectedGameResult.amount}</GameResultBetAmountText>
+                        </GameResultWinningAmount>
+                      </GameResultPlayerInfo>
+                    </GameResultPlayerSlot>
+                  </GameResultPlayerColumn>
+                </GameResultThreeColumnLayout>
+              </GameResultMain>
+
+              {/* FOOTER SECTION */}
+              <GameResultFooter>
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'center', paddingTop: '0.5rem', backgroundImage: 'url(/coinflip-grid-sW9YO0BH.webp)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
+                  <GameResultFairnessButton>
+                    <img src="/001-policy.png" alt="Policy" style={{ width: '16px', height: '16px', marginRight: '0.5rem' }} />
+                    Fairness
+                  </GameResultFairnessButton>
+                </div>
+                <GameResultHashInfo>
+                  <GameResultHashText>HASHED SEED: {hashedSeed}</GameResultHashText>
+                </GameResultHashInfo>
+              </GameResultFooter>
+            </GameResultModal>
+          </GameResultModalParent>
+        </GameResultModalOverlay>
+      )}
+
       {/* Transaction Modal */}
       {showTransactionModal && (
-        <ModalOverlay onClick={closeModal}>
-          <TransactionModal onClick={(e) => e.stopPropagation()}>
-            <ModalTitle>COINFLIP #{gameId}</ModalTitle>
-            
-            <GameInterface>
-              <PlayersRow>
-                <PlayerSlot>
-                  <PlayerAvatarModal>
-                    <PlayerNumber>1</PlayerNumber>
-                    👤
-                  </PlayerAvatarModal>
-                  <PlayerInfoModal>
-                    <PlayerNameModal>You</PlayerNameModal>
-                    <BetAmountModal>{currency === 'SOL' ? 'Ξ' : 'FAKE'} {wager}</BetAmountModal>
-                  </PlayerInfoModal>
-                </PlayerSlot>
+        <ModalOverlay onClick={closeModal} style={{ opacity: isModalVisible ? 1 : 0 }}>
+          <ModalParent onClick={(e) => e.stopPropagation()} style={{ 
+            opacity: isModalVisible ? 1 : 0, 
+            transform: isModalVisible ? 'scale(1)' : 'scale(0.9)' 
+          }}>
+            <TransactionModal>
+              {/* X BUTTON AT TOP */}
+              <div style={{ position: 'absolute', top: '1rem', right: '1rem', zIndex: 10 }}>
+                <button 
+                  onClick={closeModal} 
+                  style={{ 
+                    background: 'rgb(48, 48, 48)', 
+                    border: 'none', 
+                    borderRadius: '0.5rem',
+                    width: '42px',
+                    height: '40px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 8px 5px #0000001f, inset 0 2px #ffffff12, inset 0 -2px #0000003d',
+                    transition: 'all 0.25s ease',
+                    transform: 'translateY(0)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)'
+                  }}
+                >
+                  <img src="/001-close.png" alt="Close" style={{ width: '12px', height: '12px' }} />
+                </button>
+              </div>
+              
+              <GameInterface>
+                {/* HEADER SECTION */}
+                <ModalHeader>
+                  <ModalTitle>
+                    <img src="/002-weapon.png" alt="Weapon" style={{ width: '20px', height: '20px', marginRight: '0.5rem' }} />
+                    COINFLIP
+                  </ModalTitle>
+                </ModalHeader>
 
-                <CoinContainer>
-        <Canvas
-          linear
-          flat
-          orthographic
-          camera={{
-            zoom: 80,
-            position: [0, 0, 100],
-          }}
-        >
-          <React.Suspense fallback={null}>
-                      <Coin result={0} flipping={isSpinning} />
-          </React.Suspense>
-          <Effect color="white" />
-                    {isSpinning && <Effect color="white" />}
-          <ambientLight intensity={3} />
-          <directionalLight
-            position-z={1}
-            position-y={1}
-            castShadow
-            color="#CCCCCC"
-          />
-          <hemisphereLight
-            intensity={.5}
-            position={[0, 1, 0]}
-            scale={[1, 1, 1]}
-            color="#ffadad"
-            groundColor="#6666fe"
-          />
-        </Canvas>
-                </CoinContainer>
+                {/* MIDDLE SECTION - 3 COLUMN LAYOUT */}
+                <ModalMain>
+                  <ThreeColumnLayout>
+                    {/* LEFT COLUMN - Player 1 */}
+                    <PlayerColumn>
+                      <PlayerSlot>
+                        <PlayerAvatarContainer>
+                          <PlayerAvatarModal>
+                            👤
+                            <CoinSideIndicator>
+                              <CoinSideIcon 
+                                src={side === 'heads' ? HEADS_IMAGE : TAILS_IMAGE} 
+                                alt={side}
+                                onLoad={() => console.log('Player 1 image loaded:', side === 'heads' ? 'HEADS_IMAGE' : 'TAILS_IMAGE')}
+                                onError={() => console.log('Player 1 image failed to load:', side === 'heads' ? 'HEADS_IMAGE' : 'TAILS_IMAGE')}
+                              />
+                            </CoinSideIndicator>
+                          </PlayerAvatarModal>
+                        </PlayerAvatarContainer>
+                        <PlayerInfoModal>
+                          <NameLevelContainer>
+                            <PlayerNameModal>You</PlayerNameModal>
+                          </NameLevelContainer>
+                          <BetAmountContainer>
+                            {currency === 'SOL' && <SolanaIconModal src="/solana.png" alt="Solana" />}
+                            <BetAmountText>{currency === 'SOL' ? 'Ξ' : 'FAKE'} {wager}</BetAmountText>
+                          </BetAmountContainer>
+                        </PlayerInfoModal>
+                      </PlayerSlot>
+                    </PlayerColumn>
 
-                <PlayerSlot isWaiting={gameState === 'waiting'}>
-                  <PlayerAvatarModal isBot={true}>
-                    <PlayerNumber>2</PlayerNumber>
-                    🤖
-                  </PlayerAvatarModal>
-                  <PlayerInfoModal>
-                    <PlayerNameModal>
-                      {gameState === 'waiting' ? 'Waiting...' : 'Bot'}
-                    </PlayerNameModal>
-                    <BetAmountModal>{currency === 'SOL' ? 'Ξ' : 'FAKE'} {gameState === 'waiting' ? '0' : wager}</BetAmountModal>
-                  </PlayerInfoModal>
-                </PlayerSlot>
-              </PlayersRow>
+                    {/* MIDDLE COLUMN - Coin */}
+                    <CoinColumn>
+                      <CoinContainer>
+                        <Canvas
+                          linear
+                          flat
+                          orthographic
+                          camera={{
+                            zoom: 80,
+                            position: [0, 0, 100],
+                          }}
+                        >
+                          <React.Suspense fallback={null}>
+                            <Coin result={coinVisualResult} flipping={isSpinning} />
+                          </React.Suspense>
+                          <Effect color="white" />
+                          {isSpinning && <Effect color="white" />}
+                          <ambientLight intensity={3} />
+                          <directionalLight
+                            position-z={1}
+                            position-y={1}
+                            castShadow
+                            color="#CCCCCC"
+                          />
+                          <hemisphereLight
+                            intensity={.5}
+                            position={[0, 1, 0]}
+                            scale={[1, 1, 1]}
+                            color="#ffadad"
+                            groundColor="#6666fe"
+                          />
+                        </Canvas>
+                      </CoinContainer>
+                    </CoinColumn>
 
-               <GameActions>
-                 {gameState === 'waiting' && (
-                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
-                     <div style={{ textAlign: 'center', padding: '10px', background: '#1a1a1a', borderRadius: '8px', marginBottom: '10px' }}>
-                       <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px', color: '#42ff78' }}>
-                         Game Ready
-          </div>
-                       <div style={{ fontSize: '14px', color: '#888' }}>
-                         You've already paid {wager} {currency}. Ready to play!
-                       </div>
-                     </div>
-                     <button
-                       onClick={() => {
-                         console.log('Call Bot button clicked:', { gambaIsPlaying: gamba.isPlaying, gameState, currency })
-                         callBot()
-                       }}
-                       disabled={false}
-                       style={{
-                         background: '#6741ff',
-                         border: 'none',
-                         borderRadius: '12px',
-                         padding: '1rem 2rem',
-                         color: 'white',
-                         fontSize: '1.125rem',
-                         fontWeight: '700',
-                         fontFamily: 'Flama, sans-serif',
-                         cursor: 'pointer',
-                         transition: 'all 0.2s ease',
-                         width: '100%'
-                       }}
-                     >
-                       {gamba.isPlaying ? 'Calling Bot...' : 'Call Bot'}
-                     </button>
-                     <div style={{ textAlign: 'center', fontSize: '14px', color: '#888' }}>
-                       Or wait for another player to join
-                     </div>
-                   </div>
-                 )}
-                
-                {gameState === 'joining' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
-                    <div style={{ textAlign: 'center', padding: '10px', background: '#1a1a1a', borderRadius: '8px' }}>
-                      <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '5px' }}>
-                        Join Game
-                      </div>
-                      <div style={{ fontSize: '14px', color: '#888' }}>
-                        Pay {wager} {currency} to join this coinflip
-                      </div>
-                    </div>
-                    <button
-                      onClick={confirmJoin}
-                      disabled={gamba.isPlaying}
-                      style={{
-                        background: '#42ff78',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '1rem 2rem',
-                        color: 'black',
-                        fontSize: '1.125rem',
-                        fontWeight: '700',
-                        fontFamily: 'Flama, sans-serif',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        width: '100%'
-                      }}
-                    >
-                      {gamba.isPlaying ? 'Joining...' : 'Join & Pay'}
-                    </button>
+                    {/* RIGHT COLUMN - Player 2 */}
+                    <PlayerColumn>
+                      <PlayerSlot isWaiting={gameState === 'waiting'}>
+                        <PlayerAvatarContainer>
+                          <PlayerAvatarModal isBot={true}>
+                            {gameState === 'waiting' ? (
+                              <img src={UNKNOWN_IMAGE} alt="Waiting..." style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' }} />
+                            ) : (
+                              '🤖'
+                            )}
+                            <CoinSideIndicator>
+                              <CoinSideIcon 
+                                src={creatorSide === 'heads' ? TAILS_IMAGE : HEADS_IMAGE} 
+                                alt={creatorSide === 'heads' ? 'tails' : 'heads'}
+                                onLoad={() => console.log('Player 2 image loaded:', creatorSide === 'heads' ? 'TAILS_IMAGE' : 'HEADS_IMAGE')}
+                                onError={() => console.log('Player 2 image failed to load:', creatorSide === 'heads' ? 'TAILS_IMAGE' : 'HEADS_IMAGE')}
+                              />
+                            </CoinSideIndicator>
+                          </PlayerAvatarModal>
+                        </PlayerAvatarContainer>
+                        <PlayerInfoModal>
+                          <NameLevelContainer>
+                            <PlayerNameModal>
+                              {gameState === 'waiting' ? 'Waiting...' : 'Bot'}
+                            </PlayerNameModal>
+                          </NameLevelContainer>
+                          <BetAmountContainer>
+                            {currency === 'SOL' && <SolanaIconModal src="/solana.png" alt="Solana" />}
+                            <BetAmountText>{currency === 'SOL' ? 'Ξ' : 'FAKE'} {gameState === 'waiting' ? '0' : wager}</BetAmountText>
+                          </BetAmountContainer>
+                        </PlayerInfoModal>
+                      </PlayerSlot>
+                    </PlayerColumn>
+                  </ThreeColumnLayout>
+                  
+                  {/* CALL BOT BUTTON SECTION */}
+                  <CallBotButtonWrapper>
+                    <CallBotButtonContainer>
+                      <CallBotButton
+                        onClick={() => {
+                          console.log('Call Bot button clicked:', { 
+                            gambaIsPlaying: gamba.isPlaying, 
+                            gameState, 
+                            currency,
+                            wager,
+                            side,
+                            disabled: gameState === 'playing' || gameState === 'completed'
+                          })
+                          if (gameState !== 'playing' && gameState !== 'completed') {
+                            callBot()
+                          }
+                        }}
+                        disabled={gameState === 'playing' || gameState === 'completed'}
+                        style={{ 
+                          pointerEvents: gameState === 'playing' || gameState === 'completed' ? 'none' : 'auto',
+                          zIndex: 10
+                        }}
+                      >
+                        {gameState === 'playing' ? 'Calling Bot...' : 'Call Bot'}
+                      </CallBotButton>
+                    </CallBotButtonContainer>
+                  </CallBotButtonWrapper>
+                </ModalMain>
+
+                {/* FOOTER SECTION */}
+                <ModalFooter>
+                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center', paddingTop: '0.5rem', backgroundImage: 'url(/coinflip-grid-sW9YO0BH.webp)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }}>
+                    <ShareButton>
+                      <img src="/001-policy.png" alt="Policy" style={{ width: '16px', height: '16px', marginRight: '0.5rem' }} />
+                      Fairness
+                    </ShareButton>
                   </div>
-                )}
-                
-                {gameState === 'playing' && (
-                  <div style={{ textAlign: 'center', padding: '20px' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '10px' }}>
-                      {isSpinning ? 'Spinning...' : 'Processing...'}
-                    </div>
-                    <div style={{ fontSize: '14px', color: '#888' }}>
-                      Please wait while the game processes
-                    </div>
-                  </div>
-                )}
-                
-                {gameState === 'completed' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
-                    <div style={{ textAlign: 'center', padding: '20px' }}>
-                      <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '10px' }}>
-                        Game Complete!
-                      </div>
-                      <div style={{ fontSize: '14px', color: '#888' }}>
-                        Check your recent games to see the result
-                      </div>
-                    </div>
-                    <button
-                      onClick={closeModal}
-                      style={{
-                        background: '#42ff78',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '1rem 2rem',
-                        color: 'black',
-                        fontSize: '1.125rem',
-                        fontWeight: '700',
-                        fontFamily: 'Flama, sans-serif',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        width: '100%'
-                      }}
-                    >
-                      Close
-                    </button>
-                  </div>
-                )}
-              </GameActions>
-
-              <GameInfo>
-                <InfoText>HASHED SEED: {hashedSeed}</InfoText>
-                <InfoText>SECRET: {gameState === 'waiting' ? 'Waiting...' : 'Revealed'}</InfoText>
-                <ShareButton>Share</ShareButton>
-              </GameInfo>
-            </GameInterface>
-          </TransactionModal>
+                  <GameInfo>
+                    <InfoTextContainer>
+                      <InfoText>HASHED SEED: {hashedSeed}</InfoText>
+                    </InfoTextContainer>
+                  </GameInfo>
+                </ModalFooter>
+              </GameInterface>
+            </TransactionModal>
+          </ModalParent>
         </ModalOverlay>
       )}
       </GambaUi.Portal>

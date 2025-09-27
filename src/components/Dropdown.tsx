@@ -29,8 +29,9 @@ const Wrapper = styled.div<{$visible: boolean, $anchor: 'top' | 'bottom'}>`
   `}
   & > div {
     display: grid;
-    background: #15151f;
-    border-radius: 10px;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
     overflow: hidden;
     padding: 5px;
     gap: 5px;

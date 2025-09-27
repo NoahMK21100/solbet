@@ -14,7 +14,7 @@ import {
 // exactly the same wrapper width as WelcomeBanner / MainWrapper
 const Wrapper = styled.div`
   width: 100%;
-  max-width: 1200px;
+  max-width: 1300px;
   margin: 0 auto;
   padding: 0 20px;
   box-sizing: border-box;

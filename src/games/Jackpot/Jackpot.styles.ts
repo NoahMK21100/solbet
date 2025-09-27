@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 
 export const ScreenLayout = styled.div`
   width: 100%;
-  max-width: 1200px;
+  max-width: 1300px;
   margin: 0 auto;
   padding: 15px;
   display: flex;

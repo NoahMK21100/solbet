@@ -23,11 +23,11 @@ export const MainWrapper = styled.div`
     margin-top: 110px; /* Logo container (110px total height) */
     min-height: calc(100vh - 110px);
     padding: 20px 1.5rem;
-    width: 1200px; /* Fixed width - wider */
+    width: 1300px; /* Fixed width - wider */
     margin-left: 350px; /* Start after chat box */
     margin-right: 0; /* No right margin */
     position: relative;
-    left: calc((100vw - 350px - 1200px) / 2); /* Center within remaining space */
+    left: calc((100vw - 350px - 1300px) / 2); /* Center within remaining space */
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -35,11 +35,11 @@ export const MainWrapper = styled.div`
     margin-top: 110px; /* Logo container (110px total height) - same as 1024px for 1920x1080 */
     min-height: calc(100vh - 110px);
     padding: 20px 1.5rem;
-    width: 1200px; /* Fixed width - wider */
+    width: 1300px; /* Fixed width - wider */
     margin-left: 350px; /* Start after chat box */
     margin-right: 0; /* No right margin */
     position: relative;
-    left: calc((100vw - 350px - 1200px) / 2); /* Center within remaining space */
+    left: calc((100vw - 350px - 1300px) / 2); /* Center within remaining space */
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
