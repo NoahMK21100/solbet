@@ -35,7 +35,7 @@ function Root() {
         endpoint={RPC_ENDPOINT}
         config={{ commitment: 'processed' }}
       >
-        <WalletProvider autoConnect wallets={wallets}>
+        <WalletProvider wallets={wallets}>
           <WalletModalProvider>
             <TokenMetaProvider
               tokens={TOKEN_METADATA}
