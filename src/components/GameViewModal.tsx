@@ -70,8 +70,8 @@ export function GameViewModal({ gameId, gameData, onClose }: GameViewModalProps)
   const isCompleted = gameData.status === 'completed'
   const isActive = gameData.status === 'waiting' || gameData.status === 'in-play'
   
-  // Generate a mock hashseed based on game ID
-  const hashseed = `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6${gameId}`
+  // Use the actual RNG seed from the game data
+  const hashseed = gameData.rngSeed || `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6${gameId}`
   
   // Calculate profit/loss for completed games
   const profit = isCompleted && gameData.result === 'win' 
@@ -98,16 +98,25 @@ export function GameViewModal({ gameId, gameData, onClose }: GameViewModalProps)
                   width: '60px', 
                   height: '60px', 
                   borderRadius: '50%', 
-                  backgroundColor: '#4CAF50',
+                  backgroundColor: gameData.player1.avatar.startsWith('/') ? 'transparent' : '#4CAF50',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: '24px',
                   fontWeight: 'bold',
                   color: 'white',
-                  margin: '0 auto 5px'
+                  margin: '0 auto 5px',
+                  overflow: 'hidden'
                 }}>
-                  {gameData.player1.avatar}
+                  {gameData.player1.avatar.startsWith('/') ? (
+                    <img 
+                      src={gameData.player1.avatar} 
+                      alt="Player Avatar" 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                    />
+                  ) : (
+                    gameData.player1.avatar
+                  )}
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{gameData.player1.name}</div>
                 <div style={{ fontSize: '12px', color: '#ccc' }}>Level {gameData.player1.level}</div>
@@ -150,16 +159,25 @@ export function GameViewModal({ gameId, gameData, onClose }: GameViewModalProps)
                       width: '60px', 
                       height: '60px', 
                       borderRadius: '50%', 
-                      backgroundColor: '#9C27B0',
+                      backgroundColor: gameData.player2.avatar.startsWith('/') ? 'transparent' : '#9C27B0',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       fontSize: '24px',
                       fontWeight: 'bold',
                       color: 'white',
-                      margin: '0 auto 5px'
+                      margin: '0 auto 5px',
+                      overflow: 'hidden'
                     }}>
-                      {gameData.player2.avatar}
+                      {gameData.player2.avatar.startsWith('/') ? (
+                        <img 
+                          src={gameData.player2.avatar} 
+                          alt="Player Avatar" 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                        />
+                      ) : (
+                        gameData.player2.avatar
+                      )}
                     </div>
                     <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{gameData.player2.name}</div>
                     <div style={{ fontSize: '12px', color: '#ccc' }}>Level {gameData.player2.level}</div>

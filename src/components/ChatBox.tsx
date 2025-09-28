@@ -4,6 +4,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import styled from 'styled-components'
 import { useChatVisibility } from '../hooks/useChatVisibility'
 import { useOnlineUsers } from '../hooks/useOnlineUsers'
+import { getUsername, getUserLevel, getUserAvatarOrDefault, hasCustomAvatar } from '../utils'
 
 // TypeScript interfaces
 interface ChatMessage {
@@ -23,129 +24,180 @@ interface ChatBoxProps {
 const ChatContainer = styled.div<{ isVisible: boolean }>`
   display: flex;
   flex-direction: column;
-  height: 100%;
-  background-color: rgb(20, 20, 20);
-  border-right: 1px solid rgb(29, 29, 29);
+  height: auto;
+  min-height: calc(100vh - 90px);
+  background: rgba(15, 23, 24, 1);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   color: white;
   font-family: 'Flama', sans-serif;
-  position: relative;
+  position: fixed;
+  top: 90px; /* Start exactly at bottom of header */
+  bottom: 0; /* Extend to bottom of viewport */
+  left: 0;
+  width: 350px;
+  z-index: 999;
   transform: translateX(${props => props.isVisible ? '0' : '-100%'});
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-top: 0; /* Remove any margin */
+  border-top: none; /* Remove border-top to connect seamlessly */
 `
 
 const ChatHeader = styled.div`
-  padding-top: 1rem;
-  padding-bottom: 1rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
-  background: linear-gradient(180deg, #404040 0%, rgba(26, 26, 26, 0) 100%);
-  border-bottom: 1px solid rgb(29, 29, 29);
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`
+
+const ChatTitleContainer = styled.div`
+  background: rgba(15, 23, 24, 1);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `
 
 const ChatTitle = styled.h3`
   margin: 0;
   font-size: 1.125rem;
-  font-weight: 550;
+  font-weight: 700;
   color: white;
+  font-family: 'Inter', 'Inter Fallback', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+`
+
+const CollapseButton = styled.button`
+  background: rgb(48, 48, 48);
+  border: none;
+  color: white;
+  cursor: pointer;
+  width: 42px;
+  height: 40px;
+  border-radius: 0.5rem;
+  transition: all 0.25s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 5px #0000001f, inset 0 2px #ffffff12, inset 0 -2px #0000003d;
+  transform: translateY(0);
+  
+  &:hover {
+    transform: translateY(-2px);
+  }
+  
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+`
+
+const LiveChatPotSection = styled.div`
+  padding: 0.75rem 1.25rem;
+  background: rgba(146, 52, 189, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.25rem;
-  width: calc(100% - 40px);
+  margin: 1rem 1.5rem;
+  box-shadow: 
+    0 0 0 4px #000000,
+    0 0 0 6px #22222d;
+  transition: all 0.25s ease;
   
-  /* Additional styling from your specifications */
-  tab-size: 4;
-  -webkit-tap-highlight-color: transparent;
-  color-scheme: light dark;
-  -webkit-font-smoothing: antialiased;
-  -webkit-text-size-adjust: 100%;
-  font-synthesis: none;
-  --lightningcss-light: ;
-  --lightningcss-dark: initial;
-  --tw-border-spacing-x: 0;
-  --tw-border-spacing-y: 0;
-  --tw-translate-x: 0;
-  --tw-translate-y: 0;
-  --tw-rotate: 0;
-  --tw-skew-x: 0;
-  --tw-skew-y: 0;
-  --tw-scale-x: 1;
-  --tw-scale-y: 1;
-  --tw-pan-x: ;
-  --tw-pan-y: ;
-  --tw-pinch-zoom: ;
-  --tw-scroll-snap-strictness: proximity;
-  --tw-gradient-from-position: ;
-  --tw-gradient-via-position: ;
-  --tw-gradient-to-position: ;
-  --tw-ordinal: ;
-  --tw-slashed-zero: ;
-  --tw-numeric-figure: ;
-  --tw-numeric-spacing: ;
-  --tw-numeric-fraction: ;
-  --tw-ring-inset: ;
-  --tw-ring-offset-width: 0px;
-  --tw-ring-offset-color: #fff;
-  --tw-ring-color: #3b82f680;
-  --tw-ring-offset-shadow: 0 0 #0000;
-  --tw-ring-shadow: 0 0 #0000;
-  --tw-shadow: 0 0 #0000;
-  --tw-shadow-colored: 0 0 #0000;
-  --tw-blur: ;
-  --tw-brightness: ;
-  --tw-contrast: ;
-  --tw-grayscale: ;
-  --tw-hue-rotate: ;
-  --tw-invert: ;
-  --tw-saturate: ;
-  --tw-sepia: ;
-  --tw-drop-shadow: ;
-  --tw-backdrop-blur: ;
-  --tw-backdrop-brightness: ;
-  --tw-backdrop-contrast: ;
-  --tw-backdrop-grayscale: ;
-  --tw-backdrop-hue-rotate: ;
-  --tw-backdrop-invert: ;
-  --tw-backdrop-opacity: ;
-  --tw-backdrop-saturate: ;
-  --tw-backdrop-sepia: ;
-  --tw-contain-size: ;
-  --tw-contain-layout: ;
-  --tw-contain-paint: ;
-  --tw-contain-style: ;
-  box-sizing: border-box;
-  border-style: solid;
-  border-image: initial;
-  user-select: none;
-  -webkit-user-drag: none;
-  font-feature-settings: inherit;
-  font-variation-settings: inherit;
-  letter-spacing: inherit;
-  padding: 0px;
-  background-image: none;
-  font-family: inherit;
-  text-transform: none;
-  appearance: button;
-  position: relative;
-  height: 2.5rem;
-  min-width: 2.5rem;
-  cursor: pointer;
-  overflow: hidden;
-  border-radius: 0.5rem;
-  border-width: 1px;
-  --tw-border-opacity: 1;
-  border-color: rgb(59 59 59/var(--tw-border-opacity));
-  --tw-bg-opacity: 1;
-  background-color: rgb(48 48 48/var(--tw-bg-opacity));
-  padding-left: 1rem;
-  padding-right: 1rem;
+  &:hover {
+    transform: translateY(-1px);
+  }
+`
+
+const LiveChatPotTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #42ff78;
+  font-weight: 700;
   font-size: 0.875rem;
-  line-height: 1.25rem;
-  --tw-text-opacity: 1;
-  color: rgb(255 255 255/var(--tw-text-opacity));
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter, backdrop-filter;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 0.3s;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+`
+
+const LiveChatPotAmount = styled.div`
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+`
+
+const LiveChatPotAvatars = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+`
+
+const Avatar = styled.div`
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #42ff78;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: black;
+`
+
+const LiveChatPotTime = styled.div`
+  color: #888;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+`
+
+const ChatToggleButton = styled.button<{ isVisible: boolean }>`
+  position: fixed;
+  left: ${props => props.isVisible ? '-60px' : '10px'};
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgb(48, 48, 48);
+  border: 1px solid #1D1D1D;
+  border-radius: 10px;
+  color: white;
+  cursor: pointer;
+  width: 40px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 5px #0000001f, inset 0 2px #ffffff12, inset 0 -2px #0000003d;
+  transition: all 0.3s ease;
+  z-index: 1000;
+  
+  &:hover {
+    transform: translateY(-50%) translateY(-1px);
+  }
+  
+  &:active {
+    transform: translateY(-50%) translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  svg {
+    width: 16px;
+    height: 16px;
+  }
 `
 
 const ChatStatus = styled.div<{ connected: boolean }>`
@@ -201,12 +253,45 @@ const MessagesContainer = styled.div`
 
 const MessageItem = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.75rem;
   padding: 0.75rem;
-  background-color: rgb(26, 26, 26);
-  border-radius: 8px;
+  background: rgba(39, 47, 51, 0.32);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 10px;
   margin-bottom: 0.5rem;
+  border: 1px solid rgba(38, 46, 49, 0.8);
+  height: 65px;
+  box-shadow: 
+    0 0 0 2px rgba(55, 55, 60, 0.8),
+    0 0 0 4px rgba(0, 0, 0, 0.8),
+    0 0 0 6px rgba(34, 34, 45, 0.8);
+`
+
+const MessageAvatar = styled.div`
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4c1d95, #a855f7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: white;
+  flex-shrink: 0;
+  box-shadow:
+    0 0 0 3px #37373c,
+    0 0 0 6px #22222d;
+`
+
+const MessageContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
 `
 
 const MessageHeader = styled.div`
@@ -251,8 +336,7 @@ const MessageText = styled.p`
 
 const ChatInputContainer = styled.div`
   padding: 1rem;
-  border-top: 1px solid rgb(29, 29, 29);
-  background-color: rgb(26, 26, 26);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -340,8 +424,10 @@ const PlayerCount = styled.div`
   color: white;
   font-weight: 700;
   font-family: 'Flama', sans-serif;
-  background-color: #6741ff20;
-  border: 1px solid rgb(29, 29, 29);
+  background: rgba(103, 65, 255, 0.2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   padding: 0.75rem 1rem 0.75rem 0.5rem; /* Reduced left padding */
   font-size: 0.875rem;
@@ -384,8 +470,7 @@ const ChatFooter = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 1rem;
-  border-top: 1px solid rgb(29, 29, 29);
-  background-color: rgb(26, 26, 26);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 0.75rem;
   color: #888;
 `
@@ -599,68 +684,86 @@ const TraderCount = styled.div`
 
 
 
-// Mock chat data for demonstration
-const mockMessages: ChatMessage[] = [
-  {
-    id: '1',
-    username: 'Skywawaa',
-    message: 'nice',
-    timestamp: new Date(Date.now() - 300000), // 5 minutes ago
-    walletAddress: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',
-    level: 9
-  },
-  {
-    id: '2',
-    username: 'TerpGoat',
-    message: 'WWWW SKYWAWAA',
-    timestamp: new Date(Date.now() - 180000), // 3 minutes ago
-    walletAddress: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM',
-    level: 7
-  },
-  {
-    id: '3',
-    username: 'PLATYPUS',
-    message: 'jpin freak',
-    timestamp: new Date(Date.now() - 60000), // 1 minute ago
-    walletAddress: '5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1',
-    level: 15
-  },
-  {
-    id: '4',
-    username: 'Freakcrypto',
-    message: 'hahahaha cheater',
-    timestamp: new Date(Date.now() - 45000), // 45 seconds ago
-    walletAddress: '3QJmV3qfvL9SuYo34YihAf3sRCW3qSiny9qar4GSKb2H',
-    level: 17
-  },
-  {
-    id: '5',
-    username: 'DownDownSpikers',
-    message: 'To the moon! 🚀',
-    timestamp: new Date(Date.now() - 30000), // 30 seconds ago
-    walletAddress: '8K7F9H2J4L6M1N3P5Q7R9S2T4U6V8W1X3Y5Z7A9B2C4D',
-    level: 12
-  },
-  {
-    id: '6',
-    username: 'TheFirstWyatt',
-    message: 'HODL strong everyone 💎',
-    timestamp: new Date(Date.now() - 15000), // 15 seconds ago
-    walletAddress: '2A4C6E8G0I2K4M6O8Q0S2U4W6Y8Z1B3D5F7H9J2L4N6P',
-    level: 8
-  }
-]
+// Start with empty chat - only real user messages
+const mockMessages: ChatMessage[] = []
 
 export const ChatBox: React.FC<ChatBoxProps> = ({ className }) => {
   const { connected, publicKey } = useWallet()
   const walletModal = useWalletModal()
   const { isChatVisible, toggleChat } = useChatVisibility()
   const { formattedCount } = useOnlineUsers()
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [showChatRules, setShowChatRules] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+
+  // Fetch messages from API on component mount
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        const response = await fetch('/api/chat')
+        if (response.ok) {
+          const apiMessages = await response.json()
+          // Convert API format to our ChatMessage format
+          const formattedMessages: ChatMessage[] = apiMessages.map((msg: any) => ({
+            id: msg.ts?.toString() || Date.now().toString(),
+            username: msg.username || msg.user || 'Anonymous',
+            message: msg.text || '',
+            timestamp: new Date(msg.ts || Date.now()),
+            walletAddress: msg.walletAddress || 'unknown',
+            level: msg.level || 1
+          }))
+          setMessages(formattedMessages)
+          setIsInitialLoad(false)
+        }
+      } catch (error) {
+        console.error('Failed to fetch messages:', error)
+        // Fallback to mock messages if API fails
+        setMessages(mockMessages)
+        setIsInitialLoad(false)
+      }
+    }
+
+    fetchMessages()
+  }, [])
+
+  // Poll for new messages every 3 seconds
+  useEffect(() => {
+    const pollMessages = async () => {
+      try {
+        const response = await fetch('/api/chat')
+        if (response.ok) {
+          const apiMessages = await response.json()
+          const formattedMessages: ChatMessage[] = apiMessages.map((msg: any) => ({
+            id: msg.ts?.toString() || Date.now().toString(),
+            username: msg.user || 'Anonymous',
+            message: msg.text || '',
+            timestamp: new Date(msg.ts || Date.now()),
+            walletAddress: 'unknown',
+            level: 1
+          }))
+          
+          // Only update if messages have changed (avoid unnecessary re-renders)
+          setMessages(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(formattedMessages)) {
+              return formattedMessages
+            }
+            return prev
+          })
+        }
+      } catch (error) {
+        console.error('Failed to poll messages:', error)
+      }
+    }
+
+    // Start polling after initial load
+    if (!isInitialLoad) {
+      const interval = setInterval(pollMessages, 3000) // Poll every 3 seconds
+      return () => clearInterval(interval)
+    }
+  }, [isInitialLoad])
 
   // Send heartbeat to track online users
   useEffect(() => {
@@ -705,11 +808,6 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ className }) => {
     scrollToBottom()
   }, [messages])
 
-  // Generate username from wallet address
-  const getUsername = (address: string): string => {
-    if (!address) return 'Anonymous'
-    return `${address.slice(0, 4)}...${address.slice(-4)}`
-  }
 
   // Handle sending a new message
   const handleSendMessage = async () => {
@@ -718,24 +816,44 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ className }) => {
     setIsLoading(true)
     
     try {
-      const message: ChatMessage = {
-        id: Date.now().toString(),
-        username: getUsername(publicKey.toString()),
-        message: newMessage.trim(),
-        timestamp: new Date(),
-        walletAddress: publicKey.toString(),
-        level: Math.floor(Math.random() * 20) + 1 // Random level between 1-20
-      }
-
-      // In a real app, you would send this to your backend
-      // For now, we'll just add it to the local state
-      setMessages(prev => [...prev, message])
-      setNewMessage('')
+      const username = getUsername(publicKey.toString())
       
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 500))
+      // Send message to API
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: username,
+          text: newMessage.trim(),
+          walletAddress: publicKey.toString(),
+          username: username,
+          level: getUserLevel(publicKey.toString())
+        })
+      })
+
+      if (response.ok) {
+        // Create local message object for immediate UI update
+        const message: ChatMessage = {
+          id: Date.now().toString(),
+          username: username,
+          message: newMessage.trim(),
+          timestamp: new Date(),
+          walletAddress: publicKey.toString(),
+          level: getUserLevel(publicKey.toString())
+        }
+
+        // Add to local state for immediate display
+        setMessages(prev => [...prev, message])
+        setNewMessage('')
+        
+        console.log('✅ Message sent successfully')
+      } else {
+        console.error('Failed to send message to API')
+        alert('Failed to send message. Please try again.')
+      }
     } catch (error) {
       console.error('Failed to send message:', error)
+      alert('Failed to send message. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -766,33 +884,66 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ className }) => {
 
   return (
     <>
+      {/* Chat Toggle Button - Shows when chat is hidden */}
+      <ChatToggleButton isVisible={isChatVisible} onClick={toggleChat}>
+        <img src="/002-right.png" alt="Open Chat" style={{ width: '16px', height: '16px' }} />
+      </ChatToggleButton>
+
       <ChatContainer className={className} isVisible={isChatVisible}>
-        {/* Airdrop section hidden for now */}
-        <div style={{ display: 'none' }}>
-          <AirdropSection>
-            <AirdropText>
-              <span>🔴</span>
-              <span>LIVE</span>
-              <span>AIRDROP</span>
-            </AirdropText>
-            <AirdropValue>
-              <span>0.250</span>
-              <span>🪙</span>
-            </AirdropValue>
-          </AirdropSection>
-        </div>
+        {/* Chat Header with Title and Collapse Button */}
+        <ChatHeader>
+          <ChatTitleContainer>
+            <ChatTitle>SOLBET Chat</ChatTitle>
+          </ChatTitleContainer>
+          <CollapseButton onClick={toggleChat}>
+            <img src="/002-right.png" alt="Collapse" style={{ width: '12px', height: '12px', transform: 'rotate(180deg)' }} />
+          </CollapseButton>
+        </ChatHeader>
+
+        {/* Live Chat Pot Section */}
+        <LiveChatPotSection>
+          <LiveChatPotTitle>
+            <span>🔴</span>
+            <span>LIVE CHATPOT</span>
+          </LiveChatPotTitle>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <LiveChatPotAmount>0.000</LiveChatPotAmount>
+            <LiveChatPotAvatars>
+              <Avatar>👤</Avatar>
+              <Avatar>🐱</Avatar>
+            </LiveChatPotAvatars>
+            <LiveChatPotTime>19:14</LiveChatPotTime>
+          </div>
+        </LiveChatPotSection>
 
         <MessagesContainer>
           {messages.map((message) => (
             <MessageItem key={message.id}>
-              <MessageHeader>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <Username>{message.username}</Username>
-                  <UserLevel>{message.level}</UserLevel>
-                </div>
-                <Timestamp>{formatTimestamp(message.timestamp)}</Timestamp>
-              </MessageHeader>
-              <MessageText>{message.message}</MessageText>
+              <MessageAvatar>
+                {hasCustomAvatar(message.walletAddress) ? (
+                  <img 
+                    src={getUserAvatarOrDefault(message.walletAddress)} 
+                    alt="Profile Avatar" 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+                  />
+                ) : (
+                  <img 
+                    src="/solly.png" 
+                    alt="Default Avatar" 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+                  />
+                )}
+              </MessageAvatar>
+              <MessageContent>
+                <MessageHeader>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <Username>{message.username}</Username>
+                    <UserLevel>{message.level}</UserLevel>
+                  </div>
+                  <Timestamp>{formatTimestamp(message.timestamp)}</Timestamp>
+                </MessageHeader>
+                <MessageText>{message.message}</MessageText>
+              </MessageContent>
             </MessageItem>
           ))}
           <div ref={messagesEndRef} />

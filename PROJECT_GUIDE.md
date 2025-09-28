@@ -55,6 +55,13 @@ Solbet is a Solana-based gambling platform built with React, TypeScript, and the
 - **Icon.tsx**: Icon component with various icon types
 - **Slider.tsx**: Slider input component
 - **TrollBox.tsx**: Chat/messaging component
+- **ChatBox.tsx**: Main chat sidebar component with live chat functionality
+- **RegistrationModal.tsx**: Mandatory user registration modal with Cloudflare verification
+- **ProfilePage.tsx**: Full-screen user profile page with tabbed navigation
+- **ProfileDropdown.tsx**: Hamburger menu dropdown for profile navigation
+- **BonusPage.tsx**: Bonus page component (coming soon)
+- **StatisticsPage.tsx**: Statistics page component (coming soon)
+- **TransactionsPage.tsx**: Transactions page component (coming soon)
 - **index.tsx**: Component exports
 
 ### Sections (Main UI Components)
@@ -72,10 +79,11 @@ Solbet is a Solana-based gambling platform built with React, TypeScript, and the
 - **Purpose**: Wallet connection and user management
 - **What it does**:
   - Renders "Connect" button when wallet not connected
-  - Shows wallet info when connected
-  - Handles wallet modal opening
+  - Shows ProfileDropdown when connected (with user avatar and hamburger menu)
+  - Handles wallet modal opening and profile navigation
   - **Key styled components**: ConnectButtonContainer, CustomConnectButton
-  - **Custom styling**: Purple gradient button matching Solpot design
+  - **Custom styling**: Purple gradient button matching Solbet design
+  - **Integration**: Uses ProfileDropdown component for connected users
 
 #### `src/sections/Dashboard/`
 - **Dashboard.tsx**: Main dashboard page
@@ -141,6 +149,15 @@ Each game is a self-contained module with its own:
 - **Purpose**: Utility functions
 - **What it contains**: Helper functions like string truncation
 
+### API Endpoints
+
+#### `api/`
+- **register-user.ts**: Backend API for user registration with email verification
+- **cloudflare-verify.ts**: Backend API for Cloudflare Turnstile verification
+- **chat.ts**: Real-time chat functionality
+- **coinflip-games.ts**: Coinflip game data and management
+- **online-users.ts**: Online user tracking
+
 ## Key Styling Information
 
 ### Wallet Modal Styling
@@ -166,10 +183,14 @@ The wallet modal is styled in `src/styles.css` with these key classes:
 |------|---------|---------------|
 | `src/styles.css` | Global styles + wallet modal | All UI styling, wallet modal appearance |
 | `src/sections/Header.tsx` | Navigation header | Top bar, logo, navigation menu, social buttons |
-| `src/sections/UserButton.tsx` | Wallet connection | Connect button styling, user modal |
+| `src/sections/UserButton.tsx` | Wallet connection | Connect button styling, profile dropdown integration |
+| `src/components/ProfilePage.tsx` | User profile page | Full-screen profile with tabs, edit functionality |
+| `src/components/ProfileDropdown.tsx` | Profile navigation | Hamburger menu with profile links |
+| `src/components/RegistrationModal.tsx` | User registration | Mandatory signup form with Cloudflare verification |
+| `src/components/ChatBox.tsx` | Chat sidebar | Live chat, user messages, chat pot display |
 | `src/styles.ts` | Layout components | Main wrapper, responsive margins |
 | `src/index.tsx` | App setup | Wallet providers, app configuration |
-| `src/App.tsx` | Routing | Page navigation, route definitions |
+| `src/App.tsx` | Routing | Page navigation, route definitions, registration flow |
 | `src/constants.ts` | Configuration | RPC endpoints, fees, token metadata |
 | `src/games/*/index.tsx` | Individual games | Game logic, UI, betting mechanics |
 
@@ -187,8 +208,127 @@ Edit `src/sections/UserButton.tsx` - modify `CustomConnectButton` styling
 ### To add new games:
 Create new folder in `src/games/` with index.tsx, styles.ts, constants.ts
 
+### To modify profile system:
+Edit `src/components/ProfilePage.tsx` for main profile functionality
+Edit `src/components/ProfileDropdown.tsx` for dropdown navigation
+
+### To modify registration flow:
+Edit `src/components/RegistrationModal.tsx` for signup form
+Edit `src/App.tsx` for registration state management
+
+### To modify chat functionality:
+Edit `src/components/ChatBox.tsx` for chat sidebar
+Edit `api/chat.ts` for backend chat logic
+
 ### To modify global styling:
 Edit `src/styles.css` for CSS or `src/styles.ts` for styled-components
 
 ### To change app configuration:
 Edit `src/constants.ts` for settings, `src/index.tsx` for providers
+
+## Troubleshooting Common Issues
+
+### Coinflip "Trade Assertion Failed" Error:
+**Problem**: Game shows "Transaction failed: Assertion failed" when trying to create a game
+**Root Cause**: Incorrect wager conversion from SOL to lamports
+**Solution**: 
+- `GambaUi.WagerInput` already returns values in lamports (e.g., 10,000,000 = 0.01 SOL)
+- Use `const wagerInLamports = wager` (NOT `Math.floor(wager * 1_000_000_000)`)
+- Multiplying by 1 billion again creates invalid amounts (10,000,000 SOL instead of 0.01 SOL)
+
+### Bet Array Configuration:
+**Correct**: `heads: [2, 0], tails: [0, 2]` (original Gamba format)
+**Gamba Requirement**: Bet arrays don't need to sum to 1, the [2, 0] format is correct for coinflip
+
+### Wager Display Issues:
+**Problem**: Showing lamports instead of SOL in UI
+**Solution**: Convert lamports to SOL by dividing by 1,000,000,000
+**Example**: `(wager / 1_000_000_000).toFixed(4)` to show SOL with 4 decimals
+
+### Profile System Navigation:
+**Problem**: Profile SVG icons showing wrong icons or incorrect colors
+**Solution**: 
+- Use `/003-user.png` for profile icons (not `/profile.svg`)
+- Apply dynamic CSS filters based on current route using `location.pathname.startsWith('/profile')`
+- SVG icons should be grey for inactive tabs, original color for active tabs
+
+### Registration Flow Issues:
+**Problem**: "Registration failed" or Cloudflare verification issues
+**Solution**: 
+- Check `localStorage` for user data persistence
+- Verify Cloudflare API endpoints in `api/cloudflare-verify.ts`
+- Ensure wallet connection before showing registration modal
+
+### Button Styling Consistency:
+**Problem**: Inconsistent button styling across components
+**Solution**: 
+- Edit buttons should use `rgb(48, 48, 48)` background with multi-layer box-shadow
+- Claim buttons should be green (`#42ff78`) with same styling structure
+- All buttons should use `transform: translateY(-1px)` on hover
+
+## Gamba Game Mechanics and Fairness
+
+Games are initiated by the player, typically via a frontend app. The Gamba on-chain Program will validate each game, ensuring fair play. A random number will then be generated to determine the winner, whether it's the player or the liquidity pool being played against.
+
+### Structure
+The key components that make up a game are the following:
+
+*   **pool** - The pool (and its underlying token) used for the game.
+*   **wager** - The amount of tokens that the player will pay to start the game.
+*   **rng_seed** - A cryptographic hash (SHA-256) supplied by Gamba's RNG Provider.
+*   **client_seed** - An adjustable, random user seed generated by your browser.
+*   **nonce** - A unique, sequential number incremented per bet to ensure a one-time cryptographic hash.
+*   **bet_array** - A set of predefined multipliers per game. The RNG selects a resultIndex to multiply the wager and calculate the player's resulting token payout.
+
+Each result on Gamba is fairly, transparently and securely determined using the variables.
+
+Prior to initiating a game, the player receive an encrypted hash of the rng_seed. Since they know the hash in advance, they know that Gamba cannot change it. Meanwhile, the player can change their client_seed via the frontend they're playing on, which will alter the games result. When a game is finished, the player will once again receive the hashed rng_seed for their next game.
+
+### Outcomes
+The bet is made up of potential multipliers.
+
+After the game begins, the RNG selects a random number from the bet_array, and that number multiplies the player's wager to determine the final payout.
+
+**Example of Simple Bets:**
+
+*   `[2, 0]`: This simulates a coin toss, where a player either doubles their wager (2x) or loses it all (0x).
+
+**Examples of Different Bets:**
+
+*   `[0, 2]` - Fair bet with equal odds = allowed ✅
+*   `[1.5, 0.5]` - Fair bet with equal odds = allowed ✅
+*   `[0, 0, 0, 0, 5]` - Fair bet with varied odds = allowed ✅
+*   `[0, 0, 0, 6]` - Player advantage = not allowed ❌
+*   `[0, 3]` - Player advantage = not allowed ❌
+
+With simple rules and effective UI design, various arcade-style games like Roulette, Plinko, Crash, and others can be built using the available components.
+
+### Game Flow
+
+1.  **User Places Bet**
+    The user places a bet using any Gamba platform.
+
+2.  **Gamba Runs RNG and Returns Result**
+    Gamba programs process the bet using on-chain RNG, which selects a resultIndex that corresponds to one of the predefined multipliers in the bet_array.
+
+3.  **End Game & Payout Multiplier**
+    Gamba returns the result to the frontend and credits the player if a payout is due.
+
+### Example Transaction Structure
+Based on the Gamba Explorer screenshot provided, here's what a typical transaction looks like:
+
+**Transaction Details:**
+- **Platform:** Fronk Casino
+- **Pool:** Fronk (PUBLIC)
+- **Player:** mollusk.sol
+- **Metadata:** `0:flip:tails` (game type, side selected)
+- **Wager:** 100.00M Fronk
+- **Payout:** 0 Fronk -100% (player lost)
+- **Fees:** 5.40M Fronk
+- **Outcomes:** `0x` (lose) or `2x` (win) - standard coinflip bet array `[2, 0]`
+
+**Key Takeaways:**
+- The bet array `[2, 0]` means player either wins 2x their wager or loses everything (0x)
+- Metadata contains game type and player's choice
+- Fees are deducted from the total pool
+- Results are provably fair using cryptographic hashes

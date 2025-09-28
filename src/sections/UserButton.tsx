@@ -2,8 +2,10 @@ import { useWallet } from '@solana/wallet-adapter-react'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { GambaUi, useReferral } from 'gamba-react-ui-v2'
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 import { Modal } from '../components/Modal'
+import { ProfileDropdown } from '../components/ProfileDropdown'
 import { PLATFORM_ALLOW_REFERRER_REMOVAL, PLATFORM_REFERRAL_FEE } from '../constants'
 import { useToast } from '../hooks/useToast'
 import { useUserStore } from '../hooks/useUserStore'
@@ -164,13 +166,25 @@ const CustomConnectButton = styled.button`
   }
 `
 
-function UserModal() {
+interface UserModalProps {
+  onClose: () => void
+}
+
+function UserModal({ onClose }: UserModalProps) {
   const user = useUserStore()
   const wallet = useWallet()
   const toast = useToast()
   const walletModal = useWalletModal()
   const referral = useReferral()
   const [removing, setRemoving] = useState(false)
+  const [userData, setUserData] = useState<any>(null)
+
+  React.useEffect(() => {
+    const storedUserData = localStorage.getItem('userData')
+    if (storedUserData) {
+      setUserData(JSON.parse(storedUserData))
+    }
+  }, [])
 
   const copyInvite = () => {
     try {
@@ -194,9 +208,9 @@ function UserModal() {
   }
 
   return (
-    <Modal onClose={() => user.set({ userModal: false })}>
+    <Modal onClose={onClose}>
       <h1>
-        {truncateString(wallet.publicKey?.toString() ?? '', 6, 3)}
+        {userData ? userData.username : truncateString(wallet.publicKey?.toString() ?? '', 6, 3)}
       </h1>
       <div style={{ display: 'flex', gap: '20px', flexDirection: 'column', width: '100%', padding: '0 20px' }}>
         <div style={{ display: 'flex', gap: '10px', flexDirection: 'column', width: '100%' }}>
@@ -237,6 +251,8 @@ export function UserButton() {
   const walletModal = useWalletModal()
   const wallet = useWallet()
   const user = useUserStore()
+  const navigate = useNavigate()
+  const [showReferralModal, setShowReferralModal] = useState(false)
 
   const connect = () => {
     if (wallet.wallet) {
@@ -246,22 +262,50 @@ export function UserButton() {
     }
   }
 
+  const handleProfileClick = () => {
+    navigate('/profile')
+  }
+
+
+  const handleBonusClick = () => {
+    navigate('/bonus')
+  }
+
+  const handleStatisticsClick = () => {
+    navigate('/statistics')
+  }
+
+  const handleTransactionsClick = () => {
+    navigate('/transactions')
+  }
+
+  const handleDisconnectClick = () => {
+    wallet.disconnect()
+    navigate('/')
+  }
+
+  const handleReferralClick = () => {
+    // Show referral modal
+    setShowReferralModal(true)
+  }
+
   return (
     <>
-      {wallet.connected && user.userModal && (
-        <UserModal />
+      {/* Referral Modal */}
+      {showReferralModal && (
+        <UserModal onClose={() => setShowReferralModal(false)} />
       )}
+      
+      {/* Profile Dropdown */}
       {wallet.connected ? (
-        <div style={{ position: 'relative' }}>
-          <GambaUi.Button
-            onClick={() => user.set({ userModal: true })}
-          >
-            <div style={{ display: 'flex', gap: '.5em', alignItems: 'center' }}>
-              <img src={wallet.wallet?.adapter.icon} height="20px" />
-              {truncateString(wallet.publicKey?.toBase58(), 3)}
-            </div>
-          </GambaUi.Button>
-        </div>
+        <ProfileDropdown
+          onProfileClick={handleProfileClick}
+          onBonusClick={handleBonusClick}
+          onStatisticsClick={handleStatisticsClick}
+          onTransactionsClick={handleTransactionsClick}
+          onReferralClick={handleReferralClick}
+          onDisconnectClick={handleDisconnectClick}
+        />
       ) : (
         <ConnectButtonContainer>
           <CustomConnectButton onClick={connect}>

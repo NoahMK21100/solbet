@@ -310,20 +310,18 @@ export default function Blackjack(props: BlackjackConfig) {
       outcomeIndex = 3 // Push
     }
     
-    // Get the actual payout from Gamba
+    // Use the actual game outcome for payout (not Gamba's random result)
+    const actualPayout = currentWager * multiplier
+    console.log('Actual game payout:', actualPayout, 'Multiplier:', multiplier)
+    
+    setProfit(actualPayout)
+    setGameState('completed')
+    
+    // Still call game.result() to complete the transaction, but ignore its payout
     try {
-      const result = await game.result()
-      console.log('Gamba payout:', result.payout, 'Expected:', currentWager * multiplier)
-      
-      // Use Gamba's actual payout
-      setProfit(result.payout)
-      setGameState('completed')
+      await game.result()
     } catch (error) {
       console.error('Error getting game result:', error)
-      // Fallback to local calculation if Gamba fails
-      const localPayout = currentWager * multiplier
-      setProfit(localPayout)
-      setGameState('completed')
     }
     
     // Play appropriate sound

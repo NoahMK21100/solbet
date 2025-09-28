@@ -34,5 +34,13 @@ export const Flex = styled.div<{gap?: number}>`
   gap: ${props => props.gap ?? 10}px;
 `
 
-// Export ChatBox component
+// Export ChatBox and RegistrationModal components
 export { ChatBox } from './ChatBox'
+export { RegistrationModal } from './RegistrationModal'
+export { ProfileModal } from './ProfileModal'
+export { ProfileButton } from './ProfileButton'
+export { ProfileDropdown } from './ProfileDropdown'
+export { ProfilePage } from './ProfilePage'
+export { BonusPage } from './BonusPage'
+export { StatisticsPage } from './StatisticsPage'
+export { TransactionsPage } from './TransactionsPage'

@@ -10,9 +10,9 @@ export const MainWrapper = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
-  margin-top: 70px; /* Main header only on mobile */
+  margin-top: 90px; /* Header height */
   background: transparent; /* Remove background to show body background */
-  min-height: calc(100vh - 70px);
+  min-height: calc(100vh - 90px); /* Full height minus header */
   
   /* Mobile: No left margin since chat is hidden */
   @media (max-width: 1023px) {
@@ -20,8 +20,8 @@ export const MainWrapper = styled.div`
   }
   
   @media (min-width: 1024px) {
-    margin-top: 110px; /* Logo container (110px total height) */
-    min-height: calc(100vh - 110px);
+    margin-top: 90px; /* Header height */
+    min-height: calc(100vh - 90px); /* Full height minus header */
     padding: 20px 1.5rem;
     width: 1300px; /* Fixed width - wider */
     margin-left: 350px; /* Start after chat box */
@@ -32,8 +32,8 @@ export const MainWrapper = styled.div`
   }
 
   @media (min-width: 1920px) {
-    margin-top: 110px; /* Logo container (110px total height) - same as 1024px for 1920x1080 */
-    min-height: calc(100vh - 110px);
+    margin-top: 90px; /* Header height */
+    min-height: calc(100vh - 90px); /* Full height minus header */
     padding: 20px 1.5rem;
     width: 1300px; /* Fixed width - wider */
     margin-left: 350px; /* Start after chat box */

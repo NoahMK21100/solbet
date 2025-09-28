@@ -1,6 +1,6 @@
 // src/sections/Game/Game.tsx
 import React from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useLocation } from 'react-router-dom'
 import { GambaUi, useSoundStore } from 'gamba-react-ui-v2'
 import { useTransactionError } from 'gamba-react-v2'
 
@@ -90,7 +90,20 @@ function CustomRenderer() {
 
 export default function Game() {
   const { gameId } = useParams()
-  const game = GAMES.find(g => g.id === gameId)
+  const location = useLocation()
+  
+  // Determine game ID from URL path
+  let targetGameId = 'flip' // default
+  
+  if (gameId) {
+    targetGameId = gameId
+  } else if (location.pathname === '/blackjack') {
+    targetGameId = 'blackjack'
+  } else if (location.pathname === '/affiliates') {
+    targetGameId = 'blackjack' // or whatever default for affiliates
+  }
+  
+  const game = GAMES.find(g => g.id === targetGameId)
 
   return (
     <>
