@@ -93,17 +93,26 @@ function AppContent() {
   // Registration state
   const [showRegistration, setShowRegistration] = React.useState(false)
   const [isRegistered, setIsRegistered] = React.useState(false)
-  const { connected, publicKey } = useWallet()
+  const { connected, publicKey, connecting } = useWallet()
 
   // Check registration status on wallet connection
   React.useEffect(() => {
-    // Only check registration if wallet is actually connected
-    if (connected && publicKey) {
+    console.log('Wallet state changed:', {
+      connected,
+      connecting,
+      hasPublicKey: !!publicKey,
+      publicKey: publicKey?.toString()
+    })
+
+    // Only check registration if wallet is fully connected (not just connecting)
+    // and has a valid public key (user has actually selected and connected a wallet)
+    if (connected && !connecting && publicKey && publicKey.toString().length > 0) {
       const registrationStatus = localStorage.getItem('isRegistered')
       const userData = localStorage.getItem('userData')
       
-      console.log('Wallet connected, checking registration:', {
+      console.log('Wallet fully connected, checking registration:', {
         connected,
+        connecting,
         publicKey: publicKey.toString(),
         registrationStatus,
         hasUserData: !!userData
@@ -118,12 +127,12 @@ function AppContent() {
         setShowRegistration(false)
       }
     } else {
-      // Wallet not connected - hide registration modal
-      console.log('Wallet not connected, hiding registration modal')
+      // Wallet not fully connected or still connecting - hide registration modal
+      console.log('Wallet not fully connected or still connecting, hiding registration modal')
       setShowRegistration(false)
       setIsRegistered(false)
     }
-  }, [connected, publicKey])
+  }, [connected, connecting, publicKey])
 
   const handleRegistrationComplete = () => {
     setIsRegistered(true)
