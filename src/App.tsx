@@ -15,6 +15,7 @@ import { TransactionsPage } from './components/TransactionsPage'
 import { TOS_HTML, ENABLE_TROLLBOX } from './constants'
 import { useToast } from './hooks/useToast'
 import { useUserStore } from './hooks/useUserStore'
+import { useSupabaseUser } from './hooks/useSupabaseUser'
 import { ChatVisibilityProvider } from './hooks/useChatVisibility'
 
 import Dashboard from './sections/Dashboard/Dashboard'
@@ -36,19 +37,12 @@ const ResponsiveMainWrapper = styled(MainWrapper)<{ $isChatVisible: boolean }>`
   /* Mobile: Always no left margin since chat is hidden */
   @media (max-width: 1023px) {
     margin-left: 0 !important;
-    margin-top: 90px !important; /* Updated header height */
+    margin-top: 90px !important;
   }
   
   @media (min-width: 1024px) {
     margin-left: ${props => props.$isChatVisible ? '350px' : '0'};
-    margin-top: 90px; /* Updated header height */
-    left: ${props => props.$isChatVisible ? 'calc((100vw - 350px - 1300px) / 2)' : 'calc((100vw - 1300px) / 2)'};
-  }
-
-  @media (min-width: 1920px) {
-    margin-left: ${props => props.$isChatVisible ? '350px' : '0'};
-    margin-top: 90px; /* Updated header height */
-    left: ${props => props.$isChatVisible ? 'calc((100vw - 350px - 1300px) / 2)' : 'calc((100vw - 1300px) / 2)'};
+    margin-top: 90px;
   }
 `
 
@@ -89,54 +83,13 @@ function AppContent() {
   const newcomer = useUserStore((s) => s.newcomer)
   const set      = useUserStore((s) => s.set)
   const { isChatVisible } = useChatVisibility()
+  const { needsRegistration, isLoading: userLoading } = useSupabaseUser()
   
-  // Registration state
-  const [showRegistration, setShowRegistration] = React.useState(false)
-  const [isRegistered, setIsRegistered] = React.useState(false)
   const { connected, publicKey, connecting } = useWallet()
 
-  // Check registration status on wallet connection
-  React.useEffect(() => {
-    console.log('Wallet state changed:', {
-      connected,
-      connecting,
-      hasPublicKey: !!publicKey,
-      publicKey: publicKey?.toString()
-    })
-
-    // Only check registration if wallet is fully connected (not just connecting)
-    // and has a valid public key (user has actually selected and connected a wallet)
-    if (connected && !connecting && publicKey && publicKey.toString().length > 0) {
-      const registrationStatus = localStorage.getItem('isRegistered')
-      const userData = localStorage.getItem('userData')
-      
-      console.log('Wallet fully connected, checking registration:', {
-        connected,
-        connecting,
-        publicKey: publicKey.toString(),
-        registrationStatus,
-        hasUserData: !!userData
-      })
-      
-      if (!registrationStatus || !userData) {
-        console.log('User not registered, showing registration modal')
-        setShowRegistration(true)
-      } else {
-        console.log('User already registered')
-        setIsRegistered(true)
-        setShowRegistration(false)
-      }
-    } else {
-      // Wallet not fully connected or still connecting - hide registration modal
-      console.log('Wallet not fully connected or still connecting, hiding registration modal')
-      setShowRegistration(false)
-      setIsRegistered(false)
-    }
-  }, [connected, connecting, publicKey])
-
   const handleRegistrationComplete = () => {
-    setIsRegistered(true)
-    setShowRegistration(false)
+    // Registration completed - user will be automatically detected by useSupabaseUser
+    // No need to manage local state
   }
 
   return (
@@ -158,8 +111,8 @@ function AppContent() {
       <ScrollToTop />
       <ErrorHandler />
 
-      {/* Registration Modal - Shows after wallet connection */}
-      {showRegistration && (
+      {/* Registration Modal - Shows only if user needs registration */}
+      {connected && !connecting && needsRegistration && !userLoading && (
         <RegistrationModal onRegistrationComplete={handleRegistrationComplete} />
       )}
 
@@ -174,16 +127,12 @@ function AppContent() {
           {/* Main page shows Coinflip */}
           <Route path="/"          element={<Game />} />
           {/* Game pages */}
-          <Route path="/flip"      element={<Game />} />
-          <Route path="/blackjack" element={<Game />} />
-          <Route path="/affiliates" element={<Game />} />
+          <Route path="/:gameId"   element={<Game />} />
           {/* Profile pages */}
           <Route path="/profile"   element={<ProfilePage onDisconnect={() => window.location.href = '/'} />} />
           <Route path="/bonus"     element={<BonusPage onDisconnect={() => window.location.href = '/'} />} />
           <Route path="/statistics" element={<StatisticsPage onDisconnect={() => window.location.href = '/'} />} />
           <Route path="/transactions" element={<TransactionsPage onDisconnect={() => window.location.href = '/'} />} />
-          {/* Catch-all for other games */}
-          <Route path="/:gameId"   element={<Game />} />
         </Routes>
         
         <Footer />

@@ -18,7 +18,8 @@ import TAILS_IMAGE from './black.png'
 import UNKNOWN_IMAGE from './unknown.webp'
 import { Effect } from './Effect'
 import { GameViewModal } from '../../components/GameViewModal'
-import { getUsername, getUserLevel, getUserAvatarOrDefault, hasCustomAvatar } from '../../utils'
+// TODO: Replace with Supabase user data hooks
+// import { getUsername, getUserLevel, getUserAvatarOrDefault, hasCustomAvatar } from '../../utils'
 
 import SOUND_COIN from './coin.mp3'
 import SOUND_LOSE from './lose.mp3'
@@ -151,8 +152,8 @@ function Flip() {
   const createGame = async () => {
     try {
       
-      // Validate wager before proceeding
-      if (wager < 0.001) {
+      // Validate wager before proceeding (wager is in lamports from GambaUi.WagerInput)
+      if (wager < 1_000_000) { // 0.001 SOL = 1,000,000 lamports
         alert('Minimum wager is 0.001 SOL')
         return
       }
@@ -175,6 +176,7 @@ function Flip() {
 
       if (currency === 'SOL') {
         // For SOL games, creator pays immediately when creating the game
+        // wager is already in lamports from GambaUi.WagerInput
         const wagerInLamports = wager
         
         try {
@@ -201,13 +203,13 @@ function Flip() {
         const newGame = {
           id: newGameId,
           player1: { 
-            name: getUsername(publicKey?.toString() || ''), 
-            level: getUserLevel(publicKey?.toString() || ''), 
+            name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous', 
+            level: 1, 
             avatar: (() => {
               const address = publicKey?.toString() || ''
-              const hasCustom = hasCustomAvatar(address)
-              const avatarUrl = getUserAvatarOrDefault(address)
-              const fallback = getUsername(address).charAt(0).toUpperCase()
+              const hasCustom = false
+              const avatarUrl = '/solly.png'
+              const fallback = address ? `${address.slice(0, 4)}...${address.slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase()
               const result = hasCustom ? avatarUrl : fallback
               return result
             })(), 
@@ -242,9 +244,9 @@ function Flip() {
         const newGame = {
           id: newGameId,
           player1: { 
-            name: getUsername(publicKey?.toString() || ''), 
-            level: getUserLevel(publicKey?.toString() || ''), 
-            avatar: hasCustomAvatar(publicKey?.toString() || '') ? getUserAvatarOrDefault(publicKey?.toString() || '') : getUsername(publicKey?.toString() || '').charAt(0).toUpperCase(), 
+            name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous', 
+            level: 1, 
+            avatar: false ? '/solly.png' : publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase(), 
             side: side 
           },
           player2: null,
@@ -385,7 +387,8 @@ function Flip() {
         
         try {
           // Play the actual Gamba game to get real results and payouts
-          const wagerInLamports = Math.floor(wager * 1e9)
+          // wager is already in lamports from GambaUi.WagerInput
+          const wagerInLamports = wager
           const game = await gamba.play({
             wager: wagerInLamports,
             bet: SIDES[side],
@@ -428,9 +431,9 @@ function Flip() {
               const updatedGame = {
                 id: gameId,
                 player1: { 
-                  name: getUsername(publicKey?.toString() || ''), 
-                  level: getUserLevel(publicKey?.toString() || ''), 
-                  avatar: hasCustomAvatar(publicKey?.toString() || '') ? getUserAvatarOrDefault(publicKey?.toString() || '') : getUsername(publicKey?.toString() || '').charAt(0).toUpperCase(), 
+                  name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous', 
+                  level: 1, 
+                  avatar: false ? '/solly.png' : publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase(), 
                   side: side 
                 },
                 player2: { name: 'Bot', level: 999, avatar: '/solly.png', side: side === 'heads' ? 'tails' : 'heads' },
@@ -481,9 +484,9 @@ function Flip() {
             const updatedGame = {
               id: gameId,
               player1: { 
-            name: getUsername(publicKey?.toString() || ''), 
-            level: getUserLevel(publicKey?.toString() || ''), 
-            avatar: hasCustomAvatar(publicKey?.toString() || '') ? getUserAvatarOrDefault(publicKey?.toString() || '') : getUsername(publicKey?.toString() || '').charAt(0).toUpperCase(), 
+            name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous', 
+            level: 1, 
+            avatar: false ? '/solly.png' : publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase(), 
             side: side 
           },
               player2: { name: 'Bot', level: 999, avatar: '/solly.png', side: side === 'heads' ? 'tails' : 'heads' },
@@ -532,9 +535,9 @@ function Flip() {
           const updatedGame = {
             id: gameId,
             player1: { 
-            name: getUsername(publicKey?.toString() || ''), 
-            level: getUserLevel(publicKey?.toString() || ''), 
-            avatar: hasCustomAvatar(publicKey?.toString() || '') ? getUserAvatarOrDefault(publicKey?.toString() || '') : getUsername(publicKey?.toString() || '').charAt(0).toUpperCase(), 
+            name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous', 
+            level: 1, 
+            avatar: false ? '/solly.png' : publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase(), 
             side: side 
           },
             player2: { name: 'Bot', level: 999, avatar: '/solly.png', side: side === 'heads' ? 'tails' : 'heads' },
@@ -592,7 +595,7 @@ function Flip() {
       }
 
       // Prevent joining your own game
-      if (gameToJoin.player1.name === getUsername(publicKey?.toString() || '')) {
+      if (gameToJoin.player1.name === publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous') {
         alert('You cannot join your own game. Click "Resume" to reopen your game.')
         return
       }
@@ -632,13 +635,13 @@ function Flip() {
       const updatedGame = {
         ...gameToJoin,
         player2: {
-          name: getUsername(publicKey?.toString() || ''),
-          level: getUserLevel(publicKey?.toString() || ''),
+          name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous',
+          level: 1,
           avatar: (() => {
             const address = publicKey?.toString() || ''
-            const hasCustom = hasCustomAvatar(address)
-            const avatarUrl = getUserAvatarOrDefault(address)
-            const fallback = getUsername(address).charAt(0).toUpperCase()
+            const hasCustom = false
+            const avatarUrl = '/solly.png'
+            const fallback = address ? `${address.slice(0, 4)}...${address.slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase()
             const result = hasCustom ? avatarUrl : fallback
             return result
           })(),
@@ -703,9 +706,9 @@ function Flip() {
           const updatedGame = {
             id: gameId,
             player1: { 
-            name: getUsername(publicKey?.toString() || ''), 
-            level: getUserLevel(publicKey?.toString() || ''), 
-            avatar: hasCustomAvatar(publicKey?.toString() || '') ? getUserAvatarOrDefault(publicKey?.toString() || '') : getUsername(publicKey?.toString() || '').charAt(0).toUpperCase(), 
+            name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous', 
+            level: 1, 
+            avatar: false ? '/solly.png' : publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase(), 
             side: side 
           },
             player2: { 
@@ -784,9 +787,9 @@ function Flip() {
             const updatedGame = {
               id: gameId,
               player1: { 
-            name: getUsername(publicKey?.toString() || ''), 
-            level: getUserLevel(publicKey?.toString() || ''), 
-            avatar: hasCustomAvatar(publicKey?.toString() || '') ? getUserAvatarOrDefault(publicKey?.toString() || '') : getUsername(publicKey?.toString() || '').charAt(0).toUpperCase(), 
+            name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous', 
+            level: 1, 
+            avatar: false ? '/solly.png' : publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase(), 
             side: side 
           },
               player2: { 
@@ -1107,7 +1110,7 @@ function Flip() {
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flex: '0 0 auto' }}>
                         {(gameEntry.status === 'waiting' || gameEntry.status === 'waiting-for-players' || gameEntry.status === 'ready-to-play') ? (
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                            {gameEntry.player1.name === getUsername(publicKey?.toString() || '') ? (
+                            {gameEntry.player1.name === publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous' ? (
                               // If you own the game, show "Resume" button to reopen your game
                               <JoinButton 
                                 onClick={() => {
@@ -1391,9 +1394,9 @@ function Flip() {
                       <PlayerSlot>
                         <PlayerAvatarContainer>
                           <PlayerAvatarModal>
-                            {hasCustomAvatar(publicKey?.toString() || '') ? (
+                            {false ? (
                               <img 
-                                src={getUserAvatarOrDefault(publicKey?.toString() || '')} 
+                                src={'/solly.png'} 
                                 alt="Player Avatar" 
                                 style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' }}
                               />

@@ -1,33 +1,54 @@
 # Solbet Project Guide
 
 ## Overview
-Solbet is a Solana-based gambling platform built with React, TypeScript, and the Gamba framework. It features multiple casino games, wallet integration, and a modern UI.
+Solbet is a Solana-based gambling platform built with React, TypeScript, and the Gamba framework. It features multiple casino games, wallet integration, and a modern UI. The platform is designed to be hosted on Vercel with Supabase as the backend database for user data management.
+
+## Architecture
+
+### Frontend (Vercel)
+- **Framework**: React + TypeScript + Vite
+- **Styling**: Styled-components + CSS
+- **Wallet Integration**: Solana Wallet Adapter
+- **Gaming**: Gamba Core V2
+- **State Management**: React hooks + localStorage (temporary)
+
+### Backend (Supabase)
+- **Database**: PostgreSQL (Supabase)
+- **Authentication**: Supabase Auth
+- **Real-time**: Supabase Realtime
+- **Storage**: Supabase Storage (for profile pictures)
+- **API**: Supabase Edge Functions
+
+### Current Issues & Migration Plan
+The project currently uses localStorage for user data (username, level, avatar) which needs to be migrated to Supabase for proper multi-device support and data persistence.
 
 ## Project Structure
 
 ### Core Files
 
 #### `src/index.tsx`
-- **Purpose**: Main entry point and app configuration
+- **Purpose**: Application entry point and provider bootstrap
 - **What it does**: 
-  - Sets up Solana wallet providers (Phantom, Solflare)
-  - Configures Gamba platform providers
-  - Renders the main App component
-- **Key providers**: WalletProvider, WalletModalProvider, GambaProvider
+  - Sets up Solana wallet providers (Phantom, Solflare) with autoConnect
+  - Configures Gamba platform providers with creator fees and pools
+  - Renders the main App component inside provider tree
+- **Key providers**: ConnectionProvider, WalletProvider, WalletModalProvider, TokenMetaProvider, SendTransactionProvider, GambaProvider, GambaPlatformProvider
 
 #### `src/App.tsx`
 - **Purpose**: Main application component and routing
 - **What it does**:
   - Defines all routes for different games and pages
-  - Handles navigation between games (jackpot, flip, affiliates, etc.)
+  - Handles navigation between games and profile pages
   - Contains error boundaries and scroll-to-top functionality
+  - Manages registration modal and ToS acceptance
+  - Renders Header, Footer, ChatBox, and main content wrapper
 
 #### `src/constants.ts`
 - **Purpose**: Application configuration and constants
 - **What it contains**:
   - RPC endpoints
-  - Platform creator addresses and fees
-  - Token metadata
+  - Platform creator address and fees
+  - SOL token configuration (SOL-only platform)
   - Game configurations
 
 ### Styling Files
@@ -56,7 +77,7 @@ Solbet is a Solana-based gambling platform built with React, TypeScript, and the
 - **Slider.tsx**: Slider input component
 - **TrollBox.tsx**: Chat/messaging component
 - **ChatBox.tsx**: Main chat sidebar component with live chat functionality
-- **RegistrationModal.tsx**: Mandatory user registration modal with Cloudflare verification
+- **RegistrationModal.tsx**: User registration modal with Supabase database integration
 - **ProfilePage.tsx**: Full-screen user profile page with tabbed navigation
 - **ProfileDropdown.tsx**: Hamburger menu dropdown for profile navigation
 - **BonusPage.tsx**: Bonus page component (coming soon)
@@ -72,18 +93,19 @@ Solbet is a Solana-based gambling platform built with React, TypeScript, and the
   - Top strip with social links (X, Discord)
   - Logo section with SOLBET branding
   - Navigation menu (Jackpot, Coinflip, Affiliates)
-  - User button and token selector
+  - User button
   - **Key styled components**: TopStrip, MainHeader, LogoSection, Navigation, SocialButton
 
 #### `src/sections/UserButton.tsx`
-- **Purpose**: Wallet connection and user management
+- **Purpose**: Wallet connection and user modal management
 - **What it does**:
   - Renders "Connect" button when wallet not connected
   - Shows ProfileDropdown when connected (with user avatar and hamburger menu)
   - Handles wallet modal opening and profile navigation
+  - Manages UserModal for referral management and disconnect
   - **Key styled components**: ConnectButtonContainer, CustomConnectButton
   - **Custom styling**: Purple gradient button matching Solbet design
-  - **Integration**: Uses ProfileDropdown component for connected users
+  - **Integration**: Uses ProfileDropdown component for connected users, UserModal for referral management
 
 #### `src/sections/Dashboard/`
 - **Dashboard.tsx**: Main dashboard page
@@ -109,8 +131,8 @@ Solbet is a Solana-based gambling platform built with React, TypeScript, and the
 - **LeaderboardsModal.styles.ts**: Leaderboard styling
 
 #### `src/sections/TokenSelect.tsx`
-- **Purpose**: Token selection dropdown
-- **What it does**: Allows users to select different tokens for betting
+- **Purpose**: Token display component (SOL-only platform)
+- **What it does**: Shows SOL token information (no selection needed)
 
 ### Games
 
@@ -141,13 +163,17 @@ Each game is a self-contained module with its own:
 - **useOnClickOutside.ts**: Click outside detection
 - **useToast.ts**: Toast notification system
 - **useUserStore.ts**: User state management
+- **useSupabaseUser.ts**: Supabase user data management and database operations
 - **useLeaderboardData.ts**: Leaderboard data fetching
 
 ### Utils
 
 #### `src/utils.ts`
-- **Purpose**: Utility functions
-- **What it contains**: Helper functions like string truncation
+- **Purpose**: Essential utility functions
+- **What it contains**: 
+  - `truncateString`: String truncation helper
+  - `extractMetadata`: Game metadata extraction from Gamba transactions
+- **Note**: Removed localStorage-based user data functions (migrated to Supabase)
 
 ### API Endpoints
 
@@ -186,12 +212,12 @@ The wallet modal is styled in `src/styles.css` with these key classes:
 | `src/sections/UserButton.tsx` | Wallet connection | Connect button styling, profile dropdown integration |
 | `src/components/ProfilePage.tsx` | User profile page | Full-screen profile with tabs, edit functionality |
 | `src/components/ProfileDropdown.tsx` | Profile navigation | Hamburger menu with profile links |
-| `src/components/RegistrationModal.tsx` | User registration | Mandatory signup form with Cloudflare verification |
+| `src/components/RegistrationModal.tsx` | User registration | Supabase-integrated signup form with database checks |
 | `src/components/ChatBox.tsx` | Chat sidebar | Live chat, user messages, chat pot display |
 | `src/styles.ts` | Layout components | Main wrapper, responsive margins |
 | `src/index.tsx` | App setup | Wallet providers, app configuration |
-| `src/App.tsx` | Routing | Page navigation, route definitions, registration flow |
-| `src/constants.ts` | Configuration | RPC endpoints, fees, token metadata |
+| `src/App.tsx` | Routing | Page navigation, route definitions, registration flow, layout |
+| `src/constants.ts` | Configuration | RPC endpoints, fees, SOL token config |
 | `src/games/*/index.tsx` | Individual games | Game logic, UI, betting mechanics |
 
 ## Common Tasks
@@ -224,7 +250,7 @@ Edit `api/chat.ts` for backend chat logic
 Edit `src/styles.css` for CSS or `src/styles.ts` for styled-components
 
 ### To change app configuration:
-Edit `src/constants.ts` for settings, `src/index.tsx` for providers
+Edit `src/constants.ts` for SOL token settings and fees, `src/index.tsx` for providers
 
 ## Troubleshooting Common Issues
 
@@ -332,3 +358,111 @@ Based on the Gamba Explorer screenshot provided, here's what a typical transacti
 - Metadata contains game type and player's choice
 - Fees are deducted from the total pool
 - Results are provably fair using cryptographic hashes
+
+## TODO List - Database Migration & Improvements
+
+### 🚨 HIGH PRIORITY - Database Migration
+
+#### 1. Supabase Setup & Configuration
+- [ ] **Set up Supabase project** with proper database schema
+- [ ] **Create user profiles table** with fields: wallet_address, username, level, avatar_url, created_at, updated_at
+- [ ] **Set up Supabase Auth** for wallet-based authentication
+- [ ] **Configure Supabase Storage** for profile picture uploads
+- [ ] **Set up Row Level Security (RLS)** policies for user data protection
+- [ ] **Create Supabase Edge Functions** for user data management
+
+#### 2. Remove localStorage Dependencies
+- [ ] **Remove localStorage user data functions** from utils.ts ✅ (COMPLETED)
+- [ ] **Update ProfilePage.tsx** to use Supabase instead of localStorage
+- [ ] **Update ProfileDropdown.tsx** to fetch user data from Supabase
+- [ ] **Update RegistrationModal.tsx** to save user data to Supabase
+- [ ] **Update UserButton.tsx** to display user data from Supabase
+- [ ] **Remove all localStorage.getItem('userData') calls** throughout the codebase
+
+#### 3. Create Supabase Hooks & Services
+- [ ] **Create useUserProfile.ts hook** for user data management
+- [ ] **Create useSupabaseAuth.ts hook** for authentication
+- [ ] **Create supabase/user-service.ts** for user CRUD operations
+- [ ] **Create supabase/storage-service.ts** for file uploads
+- [ ] **Update useUserStore.ts** to work with Supabase
+
+### 🔧 MEDIUM PRIORITY - Code Cleanup
+
+#### 4. Component Updates
+- [ ] **Update ChatBox.tsx** to use Supabase for user data
+- [ ] **Update RecentPlays.tsx** to fetch user data from Supabase
+- [ ] **Update LeaderBoard components** to use Supabase data
+- [ ] **Remove hardcoded user data** from all components
+
+#### 5. API Endpoints Migration
+- [ ] **Migrate api/register-user.ts** to use Supabase instead of custom logic
+- [ ] **Update api/chat.ts** to work with Supabase user data
+- [ ] **Update api/online-users.ts** to use Supabase
+- [ ] **Remove api/cloudflare-verify.ts** (if not needed)
+- [ ] **Remove api/send-verification.ts** (if not needed)
+
+### 🎨 LOW PRIORITY - UI/UX Improvements
+
+#### 6. Profile System Enhancements
+- [ ] **Add profile picture upload** functionality
+- [ ] **Add user level progression** system
+- [ ] **Add user statistics** tracking
+- [ ] **Add user preferences** (theme, notifications, etc.)
+- [ ] **Add user activity history**
+
+#### 7. Performance & Optimization
+- [ ] **Implement data caching** for user profiles
+- [ ] **Add loading states** for all Supabase operations
+- [ ] **Optimize database queries** with proper indexing
+- [ ] **Add error handling** for network failures
+- [ ] **Implement offline support** for critical data
+
+### 🧪 TESTING & DEPLOYMENT
+
+#### 8. Testing
+- [ ] **Test user registration flow** with Supabase
+- [ ] **Test profile data persistence** across devices
+- [ ] **Test file upload** functionality
+- [ ] **Test real-time updates** for user data
+- [ ] **Test error handling** for various scenarios
+
+#### 9. Deployment
+- [ ] **Set up environment variables** for Supabase
+- [ ] **Deploy to Vercel** with Supabase integration
+- [ ] **Test production deployment**
+- [ ] **Set up monitoring** and error tracking
+- [ ] **Create backup strategy** for user data
+
+### 📋 MIGRATION CHECKLIST
+
+#### Before Migration:
+- [ ] Backup current localStorage data structure
+- [ ] Document all localStorage usage patterns
+- [ ] Plan data migration strategy for existing users
+
+#### During Migration:
+- [ ] Set up Supabase database schema
+- [ ] Create migration scripts for existing data
+- [ ] Update components one by one
+- [ ] Test each component thoroughly
+
+#### After Migration:
+- [ ] Remove all localStorage dependencies
+- [ ] Clean up unused code
+- [ ] Update documentation
+- [ ] Monitor for any issues
+
+### 🚀 IMMEDIATE NEXT STEPS
+
+1. **Set up Supabase project** and configure database schema
+2. **Create user profiles table** with proper fields
+3. **Update ProfilePage.tsx** to use Supabase instead of localStorage
+4. **Test the migration** with a simple user registration flow
+5. **Gradually migrate other components** to use Supabase
+
+### 📝 NOTES
+
+- **Current Issue**: All user data (username, level, avatar) is stored in localStorage
+- **Target State**: All user data stored in Supabase database with proper authentication
+- **Benefits**: Multi-device support, data persistence, better security, scalability
+- **Timeline**: This migration should be completed before production deployment

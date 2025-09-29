@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
 import styled from 'styled-components'
-import { getUsername, getUserAvatarOrDefault, hasCustomAvatar } from '../utils'
+// TODO: Replace with Supabase user data hooks
+// import { getUsername, getUserAvatarOrDefault, hasCustomAvatar } from '../utils'
 
 // Styled components
 const ProfilePageContainer = styled.div`
@@ -930,20 +931,12 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
       
       <MainContent>
         <ProfileHeader>
-          <ProfileAvatar hasCustomAvatar={hasCustomAvatar(publicKey?.toString() || userData.walletAddress)}>
-            {hasCustomAvatar(publicKey?.toString() || userData.walletAddress) ? (
-              <img 
-                src={getUserAvatarOrDefault(publicKey?.toString() || userData.walletAddress)} 
-                alt="Profile" 
-                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
-              />
-            ) : (
-              <img 
-                src="/solly.png" 
-                alt="Default Avatar" 
-                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
-              />
-            )}
+          <ProfileAvatar hasCustomAvatar={false}>
+            <img 
+              src="/solly.png" 
+              alt="Default Avatar" 
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
+            />
             <EditAvatarButton onClick={(e) => {
               e.preventDefault()
               setShowAvatarMenu(true)
@@ -974,9 +967,9 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
               <CloseButton onClick={() => setShowAvatarMenu(false)}>×</CloseButton>
               
               <AvatarPreview>
-                {hasCustomAvatar(publicKey?.toString() || userData.walletAddress) ? (
+                {false ? (
                   <img 
-                    src={getUserAvatarOrDefault(publicKey?.toString() || userData.walletAddress)} 
+                    src={'/solly.png'} 
                     alt="Current Avatar" 
                   />
                 ) : (
@@ -994,13 +987,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
                   const fileInput = document.createElement('input')
                   fileInput.type = 'file'
                   fileInput.accept = 'image/png,image/jpeg,image/jpg'
-                  fileInput.onchange = handleAvatarUpload
+                  fileInput.onchange = (e) => handleAvatarUpload(e as any)
                   fileInput.click()
                 }}>
                   Upload Image
                 </ModalButton>
                 
-                {hasCustomAvatar(publicKey?.toString() || userData.walletAddress) && (
+                {false && (
                   <ModalButton className="remove" onClick={handleRemoveAvatar}>
                     Remove Image
                   </ModalButton>

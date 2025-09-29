@@ -27,14 +27,8 @@ const CustomConnectButton = styled.button`
   justify-content: center;
   gap: 0.375rem;
   height: 2.5rem;
-  min-height: 2.5rem;
-  width: auto;
   min-width: 2.5rem;
-  max-width: fit-content;
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-  padding-top: 0.75rem;
-  padding-bottom: 0.75rem;
+  padding: 0.75rem 1.25rem;
   background-color: #6741FF;
   border: 1px solid #1D1D1D;
   border-radius: 10px;
@@ -42,45 +36,12 @@ const CustomConnectButton = styled.button`
   font-family: Flama, sans-serif;
   font-size: 0.875rem;
   font-weight: 700;
-  line-height: 1.25rem;
   text-shadow: rgba(0, 0, 0, 0.5) 0px 2px;
   cursor: pointer;
   user-select: none;
   position: relative;
   overflow: hidden;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter, backdrop-filter;
-  transition-duration: 0.3s;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  
-  @media (min-width: 640px) {
-    height: 2.5rem;
-    min-height: 2.5rem;
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
-    gap: 0.375rem;
-  }
-  
-  @media (min-width: 768px) {
-    height: 2.5rem;
-    min-height: 2.5rem;
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
-    gap: 0.375rem;
-  }
-  
-  @media (min-width: 1024px) {
-    height: 2.5rem;
-    min-height: 2.5rem;
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
-    gap: 0.375rem;
-  }
-  --tw-text-opacity: 1;
-  color: rgb(255 255 255 / var(--tw-text-opacity));
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter, backdrop-filter;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 0.3s;
-  text-shadow: rgba(0, 0, 0, 0.5) 0px 2px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   
   /* Radial gradient overlay for hover effect */
   &::after {
@@ -94,9 +55,7 @@ const CustomConnectButton = styled.button`
     background-image: radial-gradient(68.53% 169.15% at 50% -27.56%, #d787ff 0%, #6741ff 100%);
     opacity: 0;
     mix-blend-mode: screen;
-    transition-property: opacity;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 0.5s;
+    transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 10px;
   }
   
@@ -109,25 +68,6 @@ const CustomConnectButton = styled.button`
     position: relative;
     z-index: 2;
   }
-  
-  @media (min-width: 768px) {
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
-    font-size: 0.875rem;
-    gap: 0.375rem;
-  }
-  
-  @media (min-width: 1024px) {
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
-    font-size: 0.875rem;
-    gap: 0.375rem;
-  }
-  
   
   /* Shiny highlight on top */
   &::before {
@@ -177,14 +117,6 @@ function UserModal({ onClose }: UserModalProps) {
   const walletModal = useWalletModal()
   const referral = useReferral()
   const [removing, setRemoving] = useState(false)
-  const [userData, setUserData] = useState<any>(null)
-
-  React.useEffect(() => {
-    const storedUserData = localStorage.getItem('userData')
-    if (storedUserData) {
-      setUserData(JSON.parse(storedUserData))
-    }
-  }, [])
 
   const copyInvite = () => {
     try {
@@ -210,7 +142,7 @@ function UserModal({ onClose }: UserModalProps) {
   return (
     <Modal onClose={onClose}>
       <h1>
-        {userData ? userData.username : truncateString(wallet.publicKey?.toString() ?? '', 6, 3)}
+        {truncateString(wallet.publicKey?.toString() ?? '', 6, 3)}
       </h1>
       <div style={{ display: 'flex', gap: '20px', flexDirection: 'column', width: '100%', padding: '0 20px' }}>
         <div style={{ display: 'flex', gap: '10px', flexDirection: 'column', width: '100%' }}>
@@ -252,7 +184,6 @@ export function UserButton() {
   const wallet = useWallet()
   const user = useUserStore()
   const navigate = useNavigate()
-  const [showReferralModal, setShowReferralModal] = useState(false)
 
   const connect = () => {
     if (wallet.wallet) {
@@ -265,7 +196,6 @@ export function UserButton() {
   const handleProfileClick = () => {
     navigate('/profile')
   }
-
 
   const handleBonusClick = () => {
     navigate('/bonus')
@@ -285,15 +215,15 @@ export function UserButton() {
   }
 
   const handleReferralClick = () => {
-    // Show referral modal
-    setShowReferralModal(true)
+    // Show referral modal using user store
+    user.set({ userModal: true })
   }
 
   return (
     <>
-      {/* Referral Modal */}
-      {showReferralModal && (
-        <UserModal onClose={() => setShowReferralModal(false)} />
+      {/* User Modal */}
+      {user.userModal && (
+        <UserModal onClose={() => user.set({ userModal: false })} />
       )}
       
       {/* Profile Dropdown */}

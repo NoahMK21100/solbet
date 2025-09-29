@@ -1,89 +1,36 @@
 import { GambaTransaction } from 'gamba-core-v2'
 import { GAMES } from './games'
 
+/**
+ * Truncates a string to show only the beginning and end with ellipsis in between
+ * @param s - The string to truncate
+ * @param startLen - Number of characters to show at the start (default: 4)
+ * @param endLen - Number of characters to show at the end (default: same as startLen)
+ * @returns Truncated string in format "abcd...wxyz"
+ * @example truncateString("1234567890", 3, 3) // "123...890"
+ */
 export const truncateString = (s: string, startLen = 4, endLen = startLen) => s.slice(0, startLen) + '...' + s.slice(-endLen)
 
-// Get username from user data or generate from wallet address
-export const getUsername = (address: string): string => {
-  if (!address) return 'Anonymous'
-  
-  // Try to get username from localStorage
-  try {
-    const userData = localStorage.getItem('userData')
-    if (userData) {
-      const parsed = JSON.parse(userData)
-      if (parsed.username && parsed.walletAddress === address) {
-        return parsed.username
-      }
-    }
-  } catch (error) {
-    console.error('Error parsing user data:', error)
-  }
-  
-  // Fallback to wallet address format
-  return `${address.slice(0, 4)}...${address.slice(-4)}`
-}
-
-// Get user level from user data or default
-export const getUserLevel = (address: string): number => {
-  if (!address) return 1
-  
-  // Try to get level from localStorage
-  try {
-    const userData = localStorage.getItem('userData')
-    if (userData) {
-      const parsed = JSON.parse(userData)
-      if (parsed.walletAddress === address && parsed.level) {
-        return parsed.level
-      }
-    }
-  } catch (error) {
-    console.error('Error parsing user data:', error)
-  }
-  
-  // Default level
-  return 1
-}
-
-// Get user avatar URL from user data or default
-export const getUserAvatar = (address: string): string | null => {
-  if (!address) return null
-  
-  // Try to get avatar from localStorage
-  try {
-    const userData = localStorage.getItem('userData')
-    if (userData) {
-      const parsed = JSON.parse(userData)
-      if (parsed.walletAddress === address && parsed.avatarUrl) {
-        return parsed.avatarUrl
-      }
-    }
-  } catch (error) {
-    console.error('Error parsing user data:', error)
-  }
-  
-  // No custom avatar
-  return null
-}
-
-// Get user avatar URL or default image
-export const getUserAvatarOrDefault = (address: string): string => {
-  const customAvatar = getUserAvatar(address)
-  return customAvatar || '/solly.png'
-}
-
-// Check if user has custom avatar
-export const hasCustomAvatar = (address: string): boolean => {
-  return getUserAvatar(address) !== null
-}
-
+/**
+ * Extracts game metadata from a Gamba transaction event
+ * Parses the metadata string to identify which game was played
+ * @param event - Gamba transaction event of type 'GameSettled'
+ * @returns Object containing the game information or empty object if parsing fails
+ * @example 
+ * // For metadata "0:flip:heads" returns { game: { id: "flip", name: "Coin Flip", ... } }
+ * // For invalid metadata returns {}
+ */
 export const extractMetadata = (event: GambaTransaction<'GameSettled'>) => {
   try {
+    // Split metadata by colon: "0:flip:heads" -> ["0", "flip", "heads"]
     const [version, ...parts] = event.data.metadata.split(':')
-    const [gameId] = parts
+    const [gameId] = parts // Get the game ID (e.g., "flip")
+    
+    // Find the game configuration from GAMES array
     const game = GAMES.find((x) => x.id === gameId)
     return { game }
   } catch {
+    // Return empty object if metadata parsing fails
     return {}
   }
 }

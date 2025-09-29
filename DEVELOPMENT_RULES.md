@@ -137,6 +137,13 @@ const CenteredContent = styled.div`
 - **Consistent file structure**: Every game/component should have its styling in a separate `styles.ts` file
 - **Clean imports**: Remove `styled-components` import from main files when all styling is moved to `styles.ts`
 
+### 13. DATABASE MIGRATION RULES
+- **NEVER use localStorage for user data**: All user data (username, level, avatar) must be stored in Supabase database
+- **Remove localStorage dependencies**: When migrating components, completely remove localStorage calls and replace with Supabase hooks
+- **Use proper data types**: Use NUMERIC(20, 9) for SOL amounts, not BIGINT or INTEGER
+- **Implement proper error handling**: Always handle Supabase connection errors and loading states
+- **Test data persistence**: Verify user data persists across devices and browser sessions
+
 ## Remember
 This is a professional TypeScript/React project. Every change should be:
 - **Systematic**: Based on proper CSS principles

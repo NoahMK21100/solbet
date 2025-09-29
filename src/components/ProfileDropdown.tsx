@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import styled from 'styled-components'
 import { useLocation } from 'react-router-dom'
-import { getUsername, getUserAvatarOrDefault, hasCustomAvatar } from '../utils'
+// TODO: Replace with Supabase user data hooks
+// import { getUsername, getUserAvatarOrDefault, hasCustomAvatar } from '../utils'
 
 // Styled components
 const ProfileContainer = styled.div`
@@ -229,19 +230,11 @@ export const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
     <ProfileContainer ref={dropdownRef}>
       <ProfileButton onClick={() => setIsOpen(!isOpen)}>
         <ProfileAvatar>
-          {hasCustomAvatar(userData.walletAddress) ? (
-            <img 
-              src={getUserAvatarOrDefault(userData.walletAddress)} 
-              alt="Profile Avatar" 
-              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
-            />
-          ) : (
-            <img 
-              src="/solly.png" 
-              alt="Default Avatar" 
-              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
-            />
-          )}
+          <img
+            src="/solly.png"
+            alt="Default Avatar"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+          />
         </ProfileAvatar>
         <ProfileInfo>
           <Username>{userData.username}</Username>

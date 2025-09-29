@@ -4,7 +4,8 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import styled from 'styled-components'
 import { useChatVisibility } from '../hooks/useChatVisibility'
 import { useOnlineUsers } from '../hooks/useOnlineUsers'
-import { getUsername, getUserLevel, getUserAvatarOrDefault, hasCustomAvatar } from '../utils'
+// TODO: Replace with Supabase user data hooks
+// import { getUsername, getUserLevel, getUserAvatarOrDefault, hasCustomAvatar } from '../utils'
 
 // TypeScript interfaces
 interface ChatMessage {
@@ -816,7 +817,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ className }) => {
     setIsLoading(true)
     
     try {
-      const username = getUsername(publicKey.toString())
+      const username = `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}`
       
       // Send message to API
       const response = await fetch('/api/chat', {
@@ -827,7 +828,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ className }) => {
           text: newMessage.trim(),
           walletAddress: publicKey.toString(),
           username: username,
-          level: getUserLevel(publicKey.toString())
+          level: 1
         })
       })
 
@@ -839,7 +840,7 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ className }) => {
           message: newMessage.trim(),
           timestamp: new Date(),
           walletAddress: publicKey.toString(),
-          level: getUserLevel(publicKey.toString())
+          level: 1
         }
 
         // Add to local state for immediate display
@@ -920,19 +921,11 @@ export const ChatBox: React.FC<ChatBoxProps> = ({ className }) => {
           {messages.map((message) => (
             <MessageItem key={message.id}>
               <MessageAvatar>
-                {hasCustomAvatar(message.walletAddress) ? (
-                  <img 
-                    src={getUserAvatarOrDefault(message.walletAddress)} 
-                    alt="Profile Avatar" 
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
-                  />
-                ) : (
-                  <img 
-                    src="/solly.png" 
-                    alt="Default Avatar" 
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
-                  />
-                )}
+                <img 
+                  src="/solly.png" 
+                  alt="Default Avatar" 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+                />
               </MessageAvatar>
               <MessageContent>
                 <MessageHeader>
