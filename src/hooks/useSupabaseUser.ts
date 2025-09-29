@@ -6,6 +6,9 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+console.log('Supabase URL:', supabaseUrl ? 'Set' : 'Not set')
+console.log('Supabase Key:', supabaseKey ? 'Set' : 'Not set')
+
 const supabase = supabaseUrl && supabaseKey 
   ? createClient(supabaseUrl, supabaseKey)
   : null
@@ -119,6 +122,7 @@ export function useSupabaseUser() {
     username: string
     email: string
     avatar_url?: string
+    bio?: string
   }): Promise<UserProfile | null> => {
     if (!publicKey) return null
 
@@ -130,6 +134,7 @@ export function useSupabaseUser() {
         username: profileData.username,
         email: profileData.email,
         avatarUrl: profileData.avatar_url,
+        bio: profileData.bio,
         level: 1,
         totalBets: 0,
         totalWon: 0,
@@ -148,6 +153,7 @@ export function useSupabaseUser() {
         username: userData.username,
         email: userData.email,
         avatar_url: userData.avatarUrl,
+        bio: userData.bio,
         level: userData.level,
         total_bets: userData.totalBets,
         total_won: userData.totalWon,

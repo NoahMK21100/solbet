@@ -112,7 +112,7 @@ function AppContent() {
       <ErrorHandler />
 
       {/* Registration Modal - Shows only if user needs registration */}
-      {connected && !connecting && needsRegistration && !userLoading && (
+      {connected && !connecting && needsRegistration && !userLoading && publicKey && (
         <RegistrationModal onRegistrationComplete={handleRegistrationComplete} />
       )}
 
