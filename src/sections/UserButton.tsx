@@ -11,6 +11,7 @@ import { useToast } from '../hooks/useToast'
 import { useUserStore } from '../hooks/useUserStore'
 import { truncateString } from '../utils'
 
+// Styled components
 const ConnectButtonContainer = styled.div`
   background: linear-gradient(to bottom, #221e3a, #232325);
   padding: 2px;
@@ -186,11 +187,8 @@ export function UserButton() {
   const navigate = useNavigate()
 
   const connect = () => {
-    if (wallet.wallet) {
-      wallet.connect()
-    } else {
-      walletModal.setVisible(true)
-    }
+    // Always show the wallet modal to let user select and connect
+    walletModal.setVisible(true)
   }
 
   const handleProfileClick = () => {

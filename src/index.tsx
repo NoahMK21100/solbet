@@ -28,13 +28,13 @@ function Root() {
         endpoint={RPC_ENDPOINT}
         config={{ commitment: 'processed' }}
       >
-        <WalletProvider wallets={wallets} autoConnect>
+        <WalletProvider autoConnect wallets={wallets}>
           <WalletModalProvider>
             <TokenMetaProvider
               tokens={TOKEN_METADATA}
               fetcher={TOKEN_METADATA_FETCHER}
             >
-              <SendTransactionProvider priorityFee={400_201}>
+              <SendTransactionProvider priorityFee={100_201}>
                 <GambaProvider>
                   <GambaPlatformProvider
                     creator={PLATFORM_CREATOR_ADDRESS}
