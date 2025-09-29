@@ -161,111 +161,12 @@ const CreateButton = styled.button<{ disabled: boolean }>`
   }
 `
 
-const VerifyingOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(8px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  z-index: 10001;
-`
-
-const Spinner = styled.div`
-  width: 40px;
-  height: 40px;
-  border: 3px solid #333;
-  border-top: 3px solid #42ff78;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-`
-
-const VerifyingText = styled.div`
-  font-family: 'Inter', sans-serif;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: white;
-`
-
-const CloudflareSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 1rem;
-`
-
-const CloudflareLogo = styled.div`
-  font-family: 'Inter', sans-serif;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: white;
-`
-
-const CloudflareLinks = styled.div`
-  display: flex;
-  gap: 1rem;
-  
-  a {
-    font-family: 'Inter', sans-serif;
-    font-size: 0.75rem;
-    color: #888;
-    text-decoration: none;
-    
-    &:hover {
-      color: white;
-    }
-  }
-`
 
 interface RegistrationModalProps {
   onRegistrationComplete: () => void
 }
 
-// Cloudflare verification function
-async function performCloudflareVerification(): Promise<string | null> {
-  try {
-    // Check if Cloudflare is available
-    if (typeof window !== 'undefined' && (window as any).cloudflare) {
-      // Use Cloudflare's built-in verification
-      const token = await (window as any).cloudflare.verify()
-      return token
-    } else {
-      // Fallback: Use Cloudflare's API directly
-      const response = await fetch('/api/cloudflare-verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        return data.token
-      }
-      
-      // If API fails, simulate verification with a longer delay
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      return 'simulated-token-' + Date.now()
-    }
-  } catch (error) {
-    console.error('Cloudflare verification error:', error)
-    // Fallback to simulated verification
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    return 'fallback-token-' + Date.now()
-  }
-}
+// No verification needed - skip entirely
 
 export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistrationComplete }) => {
   const { publicKey, connected } = useWallet()
@@ -276,7 +177,6 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistra
     referralCode: ''
   })
   const [agreedToTerms, setAgreedToTerms] = useState(false)
-  const [isVerifying, setIsVerifying] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Check if form is valid
@@ -294,17 +194,9 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistra
     if (!isFormValid || isSubmitting || !publicKey) return
 
     setIsSubmitting(true)
-    setIsVerifying(true)
 
     try {
-      // Real Cloudflare verification
-      const cloudflareToken = await performCloudflareVerification()
-      
-      if (!cloudflareToken) {
-        throw new Error('Cloudflare verification failed')
-      }
-
-      // Create user profile with Supabase
+      // Create user profile directly - no verification needed
       const profile = await createUserProfile({
         username: formData.username.trim(),
         email: formData.email.trim(),
@@ -318,8 +210,7 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistra
           username: formData.username.trim(),
           email: formData.email.trim(),
           referralCode: formData.referralCode.trim() || null,
-          createdAt: new Date().toISOString(),
-          cloudflareToken: cloudflareToken
+          createdAt: new Date().toISOString()
         }
 
         localStorage.setItem('userData', JSON.stringify(userData))
@@ -332,7 +223,6 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistra
     } catch (error) {
       console.error('Registration error:', error)
       alert('Registration failed. Please try again.')
-      setIsVerifying(false)
     } finally {
       setIsSubmitting(false)
     }
@@ -434,19 +324,6 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistra
         </ModalWrapper>
       </ModalOverlay>
       
-      {isVerifying && (
-        <VerifyingOverlay>
-          <Spinner />
-          <VerifyingText>Verifying...</VerifyingText>
-          <CloudflareSection>
-            <CloudflareLogo>CLOUDFLARE</CloudflareLogo>
-            <CloudflareLinks>
-              <a href="#">Privacy</a>
-              <a href="#">Terms</a>
-            </CloudflareLinks>
-          </CloudflareSection>
-        </VerifyingOverlay>
-      )}
     </>
   )
 }
