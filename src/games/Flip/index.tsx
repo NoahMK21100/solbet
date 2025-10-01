@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber'
 import { GambaUi, useSound, useWagerInput } from 'gamba-react-ui-v2'
-import { useGamba } from 'gamba-react-v2'
+import { useGamba, useGambaProvider } from 'gamba-react-v2'
 import { useWallet } from '@solana/wallet-adapter-react'
 import React, { useState } from 'react'
 import { 
@@ -47,6 +47,7 @@ const PLATFORM_GAMES: any[] = []
 function Flip() {
   const game = GambaUi.useGame()
   const gamba = useGamba()
+  const { anchorProvider } = useGambaProvider()
   const { publicKey } = useWallet()
   const { profile } = useSupabaseWalletSync()
   const [side, setSide] = useState<Side>('heads')
@@ -234,33 +235,61 @@ function Flip() {
       setGameId(newGameId)
 
       if (currency === 'SOL') {
-        // Temporarily create regular game until PvP SDK provider issue is fixed
+        // Create PvP game using correct provider
         try {
-          const newGame = {
-            id: newGameId.toString(),
-            player1: { 
-              name: publicKey?.toString().slice(0, 8) + '...', 
-              side: side, 
-              amount: wager 
+          const { createGameIx, deriveGamePdaFromSeed } = await import('@gamba-labs/multiplayer-sdk')
+          const { BN } = await import('@coral-xyz/anchor')
+          
+          // Generate game seed
+          const rand = crypto.getRandomValues(new Uint8Array(8))
+          const gameSeed = new BN(rand, 'le')
+          const gamePda = deriveGamePdaFromSeed(gameSeed)
+          
+          // Create game parameters
+          const params = {
+            preAllocPlayers: 2,
+            maxPlayers: 2,
+            numTeams: 0,
+            winnersTarget: 1,
+            wagerType: 0, // sameWager
+            payoutType: 0,
+            wager: wager,
+            softDuration: 60,
+            hardDuration: 240,
+            gameSeed,
+            minBet: wager,
+            maxBet: wager,
+            accounts: {
+              gameMaker: publicKey,
+              mint: NATIVE_MINT,
             },
-            player2: null,
-            status: 'waiting',
-            createdAt: new Date(),
-            isPvp: false
-          }
+          } as const
+
+          // Create the PvP game using correct provider
+          const createIx = await createGameIx(anchorProvider as any, params)
           
-          setUserGames(prev => [...prev, newGame])
-          setPlatformGames(prev => [...prev, newGame])
-          
-          console.log('✅ Regular game created (PvP temporarily disabled):', {
-            gameId: newGame.id,
+          // Join as the creator
+          await joinPvpGame({
+            gameAccount: gamePda,
+            mint: NATIVE_MINT,
+            wager: wager,
+            creatorAddress: PLATFORM_CREATOR_ADDRESS,
+            creatorFeeBps: Math.round(MULTIPLAYER_FEE * BPS_PER_WHOLE),
+            metadata: side,
+          })
+
+          console.log('✅ PvP Game created successfully:', {
+            gameId: gamePda.toBase58(),
             side: side,
             wager: wager,
           })
+
+          // Refresh PvP games to show the new game
+          refreshPvpGames()
           
         } catch (playError: any) {
-          console.error('Error creating game:', playError)
-          alert(`Failed to create game: ${playError.message || 'Unknown error'}`)
+          console.error('Error creating PvP game:', playError)
+          alert(`Failed to create PvP game: ${playError.message || 'Unknown error'}`)
           return
         }
         
