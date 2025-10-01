@@ -134,17 +134,17 @@ const LogoLink = styled(NavLink)`
 `
 
 const LogoImage = styled.img`
-  height: 55px;
+  height: 70px;
   width: auto;
   object-fit: contain;
   cursor: pointer;
 
   @media (min-width: 640px) {
-    height: 65px;
+    height: 80px;
   }
 
   @media (min-width: 1024px) {
-    height: 75px;
+    height: 85px;
   }
 
   @media (min-width: 1920px) {
@@ -495,7 +495,7 @@ export default function Header() {
         <LogoSection>
           <Logo>
             <LogoImage 
-              src="/UpscaleLogo.png" 
+              src="/NewSolbetLogo.png" 
               alt="Solbet Logo"
             />
             <LogoLink to="/">
