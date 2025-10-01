@@ -955,11 +955,13 @@ export const ModalParent = styled.div`
   border-radius: 1rem;
   background: linear-gradient(180deg, #221E3A 0%, #232325 100%);
   width: 100% !important;
+  max-width: 820px !important;
   height: 552px !important;
   overflow: hidden;
   box-sizing: border-box;
   opacity: 1;
   transform: scale(1);
+  margin: 0 auto;
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   
   /* Only responsive on very small screens */
@@ -977,6 +979,7 @@ export const TransactionModal = styled.div`
   border-radius: 14px;
   padding: 1.5rem;
   width: 100% !important;
+  max-width: 812px !important;
   height: 544px !important;
   position: relative;
   display: flex;
@@ -1521,9 +1524,11 @@ export const GameResultModalParent = styled.div`
   border-radius: 1rem;
   background: linear-gradient(180deg, #221E3A 0%, #232325 100%);
   width: 100%;
+  max-width: 820px;
   height: 552px;
   overflow: hidden;
   box-sizing: border-box;
+  margin: 0 auto;
 `
 
 export const GameResultModal = styled.div`
@@ -1531,6 +1536,7 @@ export const GameResultModal = styled.div`
   border-radius: 14px;
   padding: 1.5rem;
   width: 100%;
+  max-width: 812px;
   height: 544px;
   position: relative;
   display: flex;
