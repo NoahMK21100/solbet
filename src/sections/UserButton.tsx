@@ -96,13 +96,13 @@ const CustomConnectButton = styled.button`
   }
   
   .wallet-icon {
-    width: 14px;
-    height: 14px;
+    width: 18px;
+    height: 18px;
     filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
     
     @media (min-width: 768px) {
-      width: 16px;
-      height: 16px;
+      width: 20px;
+      height: 20px;
     }
   }
 `

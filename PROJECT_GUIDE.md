@@ -19,8 +19,12 @@ Solbet is a Solana-based gambling platform built with React, TypeScript, and the
 - **Storage**: Supabase Storage (for profile pictures)
 - **API**: Supabase Edge Functions
 
-### Current Issues & Migration Plan
-The project currently uses localStorage for user data (username, level, avatar) which needs to be migrated to Supabase for proper multi-device support and data persistence.
+### Current Status & Architecture
+The project has been successfully migrated from localStorage to Supabase for user data management. The new architecture uses:
+- **useSupabaseWalletSync**: Main hook for wallet-based profile management
+- **Supabase Database**: PostgreSQL database with proper RLS policies
+- **Real-time Chat**: TrollBox component with Supabase chat_messages table
+- **Profile System**: Complete profile management with statistics and avatar support
 
 ## Project Structure
 
@@ -75,11 +79,11 @@ The project currently uses localStorage for user data (username, level, avatar) 
 - **Dropdown.tsx**: Dropdown UI component
 - **Icon.tsx**: Icon component with various icon types
 - **Slider.tsx**: Slider input component
-- **TrollBox.tsx**: Chat/messaging component
-- **ChatBox.tsx**: Main chat sidebar component with live chat functionality
-- **RegistrationModal.tsx**: User registration modal with Supabase database integration
-- **ProfilePage.tsx**: Full-screen user profile page with tabbed navigation
-- **ProfileDropdown.tsx**: Hamburger menu dropdown for profile navigation
+- **TrollBox.tsx**: **UPDATED** - Main chat sidebar component with Supabase integration and profile popups
+- **RegistrationModal.tsx**: **UPDATED** - User registration modal with Supabase database integration
+- **ProfilePage.tsx**: **UPDATED** - Full-screen user profile page with Supabase data and statistics
+- **ProfileDropdown.tsx**: **UPDATED** - Hamburger menu dropdown with Supabase profile data
+- **ProfilePopup.tsx**: **NEW** - User profile popup for chat username clicks
 - **BonusPage.tsx**: Bonus page component (coming soon)
 - **StatisticsPage.tsx**: Statistics page component (coming soon)
 - **TransactionsPage.tsx**: Transactions page component (coming soon)
@@ -162,8 +166,9 @@ Each game is a self-contained module with its own:
 - **useMediaQuery.ts**: Responsive breakpoint detection
 - **useOnClickOutside.ts**: Click outside detection
 - **useToast.ts**: Toast notification system
-- **useUserStore.ts**: User state management
-- **useSupabaseUser.ts**: Supabase user data management and database operations
+- **useUserStore.ts**: User state management (legacy - being phased out)
+- **useSupabaseWalletSync.ts**: **NEW** - Main Supabase integration hook for wallet-based profile management
+- **useSupabaseUser.ts**: Supabase user data management and database operations (legacy)
 - **useLeaderboardData.ts**: Leaderboard data fetching
 
 ### Utils
@@ -175,6 +180,14 @@ Each game is a self-contained module with its own:
   - `extractMetadata`: Game metadata extraction from Gamba transactions
 - **Note**: Removed localStorage-based user data functions (migrated to Supabase)
 
+#### `src/utils/upsertUserProfile.ts`
+- **Purpose**: Supabase profile management utility
+- **What it contains**:
+  - `findOrCreateProfile`: Finds existing profile or creates new one in Supabase
+  - `Profile` interface: TypeScript interface for user profile data
+  - Error handling for Supabase connection issues
+- **Integration**: Used by `useSupabaseWalletSync` hook for automatic profile management
+
 ### API Endpoints
 
 #### `api/`
@@ -183,6 +196,98 @@ Each game is a self-contained module with its own:
 - **chat.ts**: Real-time chat functionality
 - **coinflip-games.ts**: Coinflip game data and management
 - **online-users.ts**: Online user tracking
+
+## Supabase Integration Patterns
+
+### Database Schema
+The project uses a comprehensive Supabase database schema with the following key tables:
+
+#### `profiles` Table
+- **wallet_address**: Primary key, user's Solana wallet address
+- **username**: User's chosen username
+- **email**: User's email address
+- **balance**: User's SOL balance (NUMERIC(20, 9))
+- **level**: User's current level
+- **avatar_url**: URL to user's profile picture
+- **total_wagered**: Total amount wagered across all games
+- **total_winnings**: Total winnings from all games
+- **net_profit**: Net profit/loss (winnings - wagered)
+- **games_played**: Total number of games played
+- **biggest_win**: Largest single win amount
+- **luckiest_win_multiplier**: Highest multiplier achieved
+- **created_at**: Account creation timestamp
+- **updated_at**: Last profile update timestamp
+
+#### `chat_messages` Table
+- **id**: Auto-incrementing primary key
+- **username**: Message sender's username
+- **message**: Chat message content
+- **created_at**: Message timestamp
+- **wallet_address**: Sender's wallet address (for profile linking)
+
+#### `user_stats` Table
+- **wallet_address**: Foreign key to profiles table
+- **game_type**: Type of game played
+- **total_bets**: Number of bets in this game type
+- **total_wagered**: Amount wagered in this game type
+- **total_winnings**: Winnings from this game type
+- **created_at**: First bet timestamp
+- **updated_at**: Last bet timestamp
+
+### Integration Hooks
+
+#### `useSupabaseWalletSync`
+The main hook for wallet-based profile management:
+```typescript
+const { 
+  profile,           // User profile data
+  loading,           // Loading state
+  isNewUser,         // Whether this is a new user
+  error,             // Any error messages
+  walletAddress,     // Current wallet address
+  refreshProfile,    // Function to refresh profile data
+  isInitialized      // Whether hook has completed initial sync
+} = useSupabaseWalletSync()
+```
+
+**Key Features:**
+- Automatically syncs when wallet connects/disconnects
+- Creates new profiles for first-time users
+- Handles loading states and errors gracefully
+- Provides refresh functionality for data updates
+- Prevents infinite loops with proper dependency management
+
+### Error Handling Patterns
+
+#### React Hooks Violations
+- **"Rendered fewer hooks than expected"**: Caused by conditional hook calls or early returns
+- **"Should have a queue"**: Caused by circular dependencies in useEffect
+- **Solution**: Always call hooks at top level, use refs for non-render values
+
+#### Supabase Connection Issues
+- **401 Unauthorized**: RLS policies blocking access
+- **PGRST116**: Table doesn't exist yet
+- **Solution**: Implement graceful degradation and proper error boundaries
+
+### Styled-Components Best Practices
+
+#### Transient Props
+All custom props must be prefixed with `$` to prevent DOM warnings:
+```typescript
+const StyledComponent = styled.div<{ $isVisible: boolean }>`
+  transform: ${props => props.$isVisible ? 'translateX(0)' : 'translateX(-100%)'};
+`
+```
+
+#### Prop Forwarding
+Use `shouldForwardProp` for complex prop filtering:
+```typescript
+const StyledComponent = styled.div.withConfig({
+  shouldForwardProp: (prop) => !['isVisible', 'isOpen'].includes(prop)
+})<{ isVisible: boolean; isOpen: boolean }>`
+  // styling
+`
+```
 
 ## Key Styling Information
 
@@ -253,6 +358,33 @@ Edit `src/styles.css` for CSS or `src/styles.ts` for styled-components
 Edit `src/constants.ts` for SOL token settings and fees, `src/index.tsx` for providers
 
 ## Troubleshooting Common Issues
+
+### React Hooks Violations
+**Problem**: "Rendered fewer hooks than expected" or "Should have a queue" errors
+**Root Cause**: Hooks called conditionally or circular dependencies in useEffect
+**Solution**: 
+- Always call hooks at the top level of components
+- Never call hooks inside loops, conditions, or nested functions
+- Use `useRef` for values that don't trigger re-renders
+- Separate useEffect concerns into multiple effects
+- Avoid including state values in useEffect dependencies that are set inside that effect
+
+### Supabase Connection Issues
+**Problem**: 401 Unauthorized errors when accessing Supabase tables
+**Root Cause**: Row Level Security (RLS) policies blocking access
+**Solution**: 
+- Check RLS policies in Supabase dashboard
+- Ensure proper authentication is set up
+- Use service role key for server-side operations
+- Implement proper error handling for connection failures
+
+### Styled-Components Props Warnings
+**Problem**: "React does not recognize the `propName` prop on a DOM element"
+**Root Cause**: Custom props being passed to DOM elements
+**Solution**: 
+- Use transient props with `$` prefix (e.g., `$isVisible` instead of `isVisible`)
+- Use `shouldForwardProp` for complex prop filtering
+- Never pass custom props directly to DOM elements
 
 ### Coinflip "Trade Assertion Failed" Error:
 **Problem**: Game shows "Transaction failed: Assertion failed" when trying to create a game

@@ -6,6 +6,7 @@ import React, { useState } from 'react'
 import { 
   GameListHeader, AllGamesTitle, SortControls, SortByLabel, SortValue, SortDropdownContainer, ArrowContainer, SortDropdown, DropdownOption, GameContainer,
   GameCreationSection, GameHeader, GameSubtitle, GameTitle, GameControls, LeftSection, RightSection, BetAndButtonsGroup, BetInputAndButtons, CoinsAndCreateGroup, RightControls, BetAmountSection, BetLabel, SolanaIcon, BetInputWrapper, BetInput, CurrencyDropdown, USDTooltip, QuickBetButtons, QuickBetButtonContainer, QuickBetButton, ChooseSideSection, SideButtons, SideButton, CreateGameButton,
+  CustomBetInputWrapper, CustomBetInput, SolanaIconWrapper, MultiplierButtons, MultiplierButton, BetLabelRow, SolPriceDisplay,
   GameListSection, GameEntries, GameEntry, PlayerInfo, PlayerAvatar, PlayerName, PlayerLevel, WinnerCoinIcon, VsIcon, BetAmountDisplay, JoinButton, StatusButton, EyeIcon, WinningAmount, ViewGameButton,
   ModalOverlay, ModalParent, TransactionModal, ModalTitle, GameInterface, PlayersRow, PlayerSection, PlayerSlot, PlayerAvatarContainer, PlayerAvatarModal, PlayerNumber, PlayerInfoModal, PlayerNameModal, NameLevelContainer, BetAmountModal, BetAmountContainer, BetAmountText, SolanaIconModal, CoinSideIndicator, CoinSideIcon, CoinContainer, GameActions, GameInfo, InfoTextContainer, InfoText, ShareButton,
   ModalHeader, ModalMain, ModalFooter, CallBotButtonContainer, CallBotButton, CallBotButtonWrapper, ThreeColumnLayout, PlayerColumn, CoinColumn,
@@ -18,8 +19,7 @@ import TAILS_IMAGE from './black.png'
 import UNKNOWN_IMAGE from './unknown.webp'
 import { Effect } from './Effect'
 import { GameViewModal } from '../../components/GameViewModal'
-// TODO: Replace with Supabase user data hooks
-// import { getUsername, getUserLevel, getUserAvatarOrDefault, hasCustomAvatar } from '../../utils'
+import { useSupabaseWalletSync } from '../../hooks/useSupabaseWalletSync'
 
 import SOUND_COIN from './coin.mp3'
 import SOUND_LOSE from './lose.mp3'
@@ -42,10 +42,13 @@ function Flip() {
   const game = GambaUi.useGame()
   const gamba = useGamba()
   const { publicKey } = useWallet()
+  const { profile } = useSupabaseWalletSync()
   const [side, setSide] = useState<Side>('heads')
   const [creatorSide, setCreatorSide] = useState<Side>('heads') // Track the original creator's side
   
-  const [wager, setWager] = useState(0) // Start with blank
+  const [wager, setWager] = useWagerInput()
+  const [customBetAmount, setCustomBetAmount] = useState<string>('')
+  const [solPrice, setSolPrice] = useState<number>(0)
   const [currency, setCurrency] = useState<'SOL' | 'FAKE'>('SOL')
   const [games, setGames] = useState<any[]>([])
   const [userGames, setUserGames] = useState<any[]>([])
@@ -105,11 +108,56 @@ function Flip() {
     }
   }
 
+  // Fetch SOL price from CoinGecko
+  const fetchSolPrice = async () => {
+    try {
+      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd')
+      const data = await response.json()
+      setSolPrice(data.solana.usd)
+    } catch (error) {
+      console.error('Failed to fetch SOL price:', error)
+    }
+  }
+
   // Fetch games on component mount
   React.useEffect(() => {
     fetchPlatformGames()
     fetchSavedGames()
+    fetchSolPrice()
+    
+    // Update SOL price every 30 seconds
+    const priceInterval = setInterval(fetchSolPrice, 30000)
+    
+    return () => clearInterval(priceInterval)
   }, [])
+
+  // Handle custom bet input changes
+  const handleBetAmountChange = (value: string) => {
+    setCustomBetAmount(value)
+    // Convert to lamports and update wager
+    const numericValue = parseFloat(value) || 0
+    const lamports = Math.floor(numericValue * 1_000_000_000)
+    setWager(lamports)
+  }
+
+  // Handle multiplier buttons
+  const handleMultiplier = (multiplier: number) => {
+    const currentValue = parseFloat(customBetAmount) || 0
+    const newValue = currentValue * multiplier
+    setCustomBetAmount(newValue.toFixed(4))
+    setWager(Math.floor(newValue * 1_000_000_000))
+  }
+
+  // Handle input blur to enforce minimum
+  const handleInputBlur = () => {
+    const numericValue = parseFloat(customBetAmount) || 0
+    const minBet = 0.005 // 0.005 SOL minimum
+    
+    if (numericValue > 0 && numericValue < minBet) {
+      setCustomBetAmount(minBet.toFixed(4))
+      setWager(Math.floor(minBet * 1_000_000_000))
+    }
+  }
 
   const fetchSavedGames = async () => {
     try {
@@ -153,8 +201,8 @@ function Flip() {
     try {
       
       // Validate wager before proceeding (wager is in lamports from GambaUi.WagerInput)
-      if (wager < 1_000_000) { // 0.001 SOL = 1,000,000 lamports
-        alert('Minimum wager is 0.001 SOL')
+      if (wager < 5_000_000) { // 0.005 SOL = 5,000,000 lamports
+        alert('Minimum wager is 0.005 SOL')
         return
       }
       
@@ -203,16 +251,9 @@ function Flip() {
         const newGame = {
           id: newGameId,
           player1: { 
-            name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous', 
-            level: 1, 
-            avatar: (() => {
-              const address = publicKey?.toString() || ''
-              const hasCustom = false
-              const avatarUrl = '/solly.png'
-              const fallback = address ? `${address.slice(0, 4)}...${address.slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase()
-              const result = hasCustom ? avatarUrl : fallback
-              return result
-            })(), 
+            name: profile?.username || (publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'), 
+            level: profile?.level || 1, 
+            avatar: '/solly.png', // Always use default avatar for now
             side: side,
             wager: wager,
             paid: true // Creator has already paid
@@ -244,9 +285,9 @@ function Flip() {
         const newGame = {
           id: newGameId,
           player1: { 
-            name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous', 
-            level: 1, 
-            avatar: false ? '/solly.png' : publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase(), 
+            name: profile?.username || (publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'), 
+            level: profile?.level || 1, 
+            avatar: '/solly.png', // Always use default avatar for now
             side: side 
           },
           player2: null,
@@ -408,18 +449,25 @@ function Flip() {
 
               
               // Check if payout was actually received
-              if (result.payout > wagerInLamports) {
+              const isWin = result.payout > wagerInLamports
+              const winningsSOL = result.payout / 1e9
+              const betAmountSOL = wagerInLamports / 1e9
+              const multiplier = isWin ? (result.payout / wagerInLamports) : 0
+
+              if (isWin) {
                 console.log('✅ WIN: Payout received!', {
-                  wagerSOL: wagerInLamports / 1e9,
-                  payoutSOL: result.payout / 1e9,
-                  profitSOL: (result.payout - wagerInLamports) / 1e9
+                  wagerSOL: betAmountSOL,
+                  payoutSOL: winningsSOL,
+                  profitSOL: winningsSOL - betAmountSOL,
+                  multiplier: multiplier
                 })
               } else {
                 console.log('❌ LOSS: No payout received', {
-                  wagerSOL: wagerInLamports / 1e9,
-                  payoutSOL: result.payout / 1e9
+                  wagerSOL: betAmountSOL,
+                  payoutSOL: winningsSOL
                 })
               }
+
 
               sounds.play('coin')
 
@@ -520,6 +568,8 @@ function Flip() {
           const randomSeed = gameId + Date.now()
           const coinResult = (randomSeed % 2) === 0 ? 'heads' : 'tails'
           const win = coinResult === side // You win if the coin matches your selection
+          const multiplier = win ? 2.0 : 0
+          const winningsSOL = win ? wager : 0
 
           // Set visual result: show what the coin actually landed on (0 = heads, 1 = tails)
           const visualResult = coinResult === 'heads' ? 0 : 1
@@ -660,6 +710,7 @@ function Flip() {
 
       // Set up the game for joining
       setWager(gameToJoin.amount)
+      setCustomBetAmount((gameToJoin.amount / 1_000_000_000).toFixed(4))
       setSide(gameToJoin.player1.side === 'heads' ? 'tails' : 'heads') // Opposite side
       setCreatorSide(gameToJoin.player1.side) // Set the creator's original side
       setCurrency(gameToJoin.currency) // Use the same currency as the game
@@ -876,7 +927,10 @@ function Flip() {
         <GameCreationSection>
           <GameControls>
             <LeftSection>
-              <GameTitle>Coinflip</GameTitle>
+              <GameTitle>
+                <img src="/002-weapon.png" alt="Sword" style={{ width: '32px', height: '32px', marginRight: '12px' }} />
+                Coinflip
+              </GameTitle>
             </LeftSection>
 
             <RightSection>
@@ -886,20 +940,51 @@ function Flip() {
                 </BetLabel>
                 
                 <BetInputAndButtons>
-                  <BetAmountSection>
-                    <BetInputWrapper>
-                      <GambaUi.WagerInput value={wager} onChange={setWager} />
-                    </BetInputWrapper>
+                  <BetAmountSection style={{ position: 'relative' }}>
+                    <SolPriceDisplay>
+                      ${((parseFloat(customBetAmount) || 0) * solPrice).toFixed(2)}
+                    </SolPriceDisplay>
+                    <CustomBetInputWrapper>
+                      <SolanaIconWrapper>
+                        <img src="/solana.png" alt="SOL" style={{ width: '20px', height: '20px' }} />
+                      </SolanaIconWrapper>
+                      <CustomBetInput
+                        type="number"
+                        step="0.001"
+                        placeholder="0"
+                        value={customBetAmount}
+                        onChange={(e) => handleBetAmountChange(e.target.value)}
+                        onBlur={handleInputBlur}
+                      />
+                      <MultiplierButtons>
+                        <MultiplierButton onClick={() => handleMultiplier(0.5)}>
+                          x1/2
+                        </MultiplierButton>
+                        <MultiplierButton onClick={() => handleMultiplier(2)}>
+                          x2
+                        </MultiplierButton>
+                      </MultiplierButtons>
+                    </CustomBetInputWrapper>
                   </BetAmountSection>
 
                   <QuickBetButtons>
                     <QuickBetButtonContainer>
-                      <QuickBetButton onClick={() => setWager(w => (w || 0) + 0.01)}>
+                      <QuickBetButton onClick={() => {
+                        const currentValue = parseFloat(customBetAmount) || 0
+                        const newValue = currentValue + 0.01
+                        setCustomBetAmount(newValue.toFixed(4))
+                        setWager(Math.floor(newValue * 1_000_000_000))
+                      }}>
                         +0.01
                       </QuickBetButton>
                     </QuickBetButtonContainer>
                     <QuickBetButtonContainer>
-                      <QuickBetButton onClick={() => setWager(w => (w || 0) + 1)}>
+                      <QuickBetButton onClick={() => {
+                        const currentValue = parseFloat(customBetAmount) || 0
+                        const newValue = currentValue + 1
+                        setCustomBetAmount(newValue.toFixed(4))
+                        setWager(Math.floor(newValue * 1_000_000_000))
+                      }}>
                         +1
                       </QuickBetButton>
                     </QuickBetButtonContainer>
@@ -1092,8 +1177,15 @@ function Flip() {
                           </PlayerInfo>
                         ) : (
                           <PlayerInfo>
-                            <PlayerAvatar>?</PlayerAvatar>
-                            <PlayerName>Waiting...</PlayerName>
+                            <PlayerAvatar $isBot={true}>
+                              <img 
+                                src="/solly.png" 
+                                alt="Bot Avatar" 
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px', opacity: '0.5' }}
+                              />
+                            </PlayerAvatar>
+                            <PlayerName>BOT</PlayerName>
+                            <PlayerLevel>1</PlayerLevel>
                           </PlayerInfo>
                         )}
                       </div>
@@ -1116,6 +1208,7 @@ function Flip() {
                                 onClick={() => {
                                   // Reopen your own game modal - NO PAYMENT NEEDED
                                   setWager(gameEntry.amount)
+                                  setCustomBetAmount((gameEntry.amount / 1_000_000_000).toFixed(4))
                                   setSide(gameEntry.player1.side)
                                   setCreatorSide(gameEntry.player1.side) // Set creator's side
                                   setCurrency(gameEntry.currency)
@@ -1139,6 +1232,7 @@ function Flip() {
                               <JoinButton 
                                 onClick={() => {
                                   setWager(gameEntry.amount)
+                                  setCustomBetAmount((gameEntry.amount / 1_000_000_000).toFixed(4))
                                   setSide(gameEntry.player1.side)
                                   setCreatorSide(gameEntry.player1.side)
                                   setCurrency(gameEntry.currency)
@@ -1253,7 +1347,7 @@ function Flip() {
                   <GameResultPlayerColumn>
                     <GameResultPlayerSlot>
                       <GameResultPlayerAvatarContainer>
-                        <GameResultPlayerAvatar isWinner={selectedGameResult.result === 'win'}>
+                        <GameResultPlayerAvatar $isWinner={selectedGameResult.result === 'win'}>
                           {selectedGameResult.player1.avatar.startsWith('/') ? (
                             <img 
                               src={selectedGameResult.player1.avatar} 
@@ -1294,7 +1388,7 @@ function Flip() {
                   <GameResultPlayerColumn>
                     <GameResultPlayerSlot>
                       <GameResultPlayerAvatarContainer>
-                        <GameResultPlayerAvatar isWinner={selectedGameResult.result === 'lose'}>
+                        <GameResultPlayerAvatar $isWinner={selectedGameResult.result === 'lose'}>
                           {selectedGameResult.player2?.avatar && selectedGameResult.player2.avatar.startsWith('/') ? (
                             <img 
                               src={selectedGameResult.player2.avatar} 
@@ -1313,7 +1407,7 @@ function Flip() {
                       <GameResultPlayerInfo>
                         <GameResultPlayerName>{selectedGameResult.player2?.name || 'Bot'}</GameResultPlayerName>
                         <GameResultPlayerLevel>{selectedGameResult.player2?.level || '999'}</GameResultPlayerLevel>
-                        <GameResultWinningAmount isWinner={selectedGameResult.result === 'lose'}>
+                        <GameResultWinningAmount $isWinner={selectedGameResult.result === 'lose'}>
                           {selectedGameResult.currency === 'SOL' && <img src="/solana.png" alt="Solana" style={{ width: '16px', height: '16px' }} />}
                           <GameResultBetAmountText>{selectedGameResult.currency === 'SOL' ? 'Ξ' : 'FAKE'} {selectedGameResult.currency === 'SOL' ? (selectedGameResult.result === 'lose' ? ((selectedGameResult.amount * 2) / 1_000_000_000).toFixed(4) : (selectedGameResult.amount / 1_000_000_000).toFixed(4)) : selectedGameResult.amount}</GameResultBetAmountText>
                         </GameResultWinningAmount>
@@ -1417,7 +1511,7 @@ function Flip() {
                         </PlayerAvatarContainer>
                         <PlayerInfoModal>
                           <NameLevelContainer>
-                            <PlayerNameModal>You</PlayerNameModal>
+                            <PlayerNameModal>{profile?.username || 'You'}</PlayerNameModal>
                           </NameLevelContainer>
                           <BetAmountContainer>
                             {currency === 'SOL' && <SolanaIconModal src="/solana.png" alt="Solana" />}
@@ -1464,9 +1558,9 @@ function Flip() {
 
                     {/* RIGHT COLUMN - Player 2 */}
                     <PlayerColumn>
-                      <PlayerSlot isWaiting={gameState === 'waiting'}>
+                      <PlayerSlot $isWaiting={gameState === 'waiting'}>
                         <PlayerAvatarContainer>
-                          <PlayerAvatarModal isBot={true}>
+                          <PlayerAvatarModal $isBot={true}>
                             {(() => {
                               const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
                               const isMultiplayer = currentGame?.status === 'waiting-for-players' || currentGame?.status === 'ready-to-play'

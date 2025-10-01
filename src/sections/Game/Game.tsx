@@ -92,6 +92,7 @@ export default function Game() {
   const { gameId } = useParams()
   const location = useLocation()
   
+  
   // Determine game ID from URL path
   let targetGameId = 'flip' // default
   

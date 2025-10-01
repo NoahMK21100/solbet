@@ -144,6 +144,28 @@ const CenteredContent = styled.div`
 - **Implement proper error handling**: Always handle Supabase connection errors and loading states
 - **Test data persistence**: Verify user data persists across devices and browser sessions
 
+### 14. REACT HOOKS BEST PRACTICES
+- **NEVER call hooks conditionally**: All hooks must be called at the top level of components, never inside loops, conditions, or nested functions
+- **Consistent hook order**: Hooks must be called in the same order every time a component renders
+- **No early returns before hooks**: Never return early from a component before all hooks are called
+- **Use useRef for values that don't trigger re-renders**: Use refs for values that need to persist but don't cause re-renders
+- **Separate useEffect concerns**: Use multiple useEffect hooks for different concerns instead of one complex effect
+- **Avoid circular dependencies**: Don't include state values in useEffect dependencies that are set inside that same effect
+
+### 15. SUPABASE INTEGRATION PATTERNS
+- **Use useSupabaseWalletSync hook**: This hook handles wallet connection and profile syncing automatically
+- **Handle loading states**: Always check `isInitialized` and `loading` states before rendering user data
+- **Implement error boundaries**: Wrap components that use Supabase hooks in error boundaries
+- **Use transient props**: Convert styled-components props to transient props (e.g., `$isVisible` instead of `isVisible`)
+- **Graceful degradation**: Handle cases where Supabase tables might not exist yet (e.g., chat_messages table)
+- **Refresh patterns**: Use `refreshProfile()` to trigger data refresh after mutations
+
+### 16. STYLED-COMPONENTS PROPS RULES
+- **Use transient props**: All custom props must be prefixed with `$` (e.g., `$isOpen`, `$isVisible`, `$isConnect`)
+- **Never pass DOM props**: Custom props should never be passed to DOM elements
+- **Use shouldForwardProp**: For complex prop filtering, use `shouldForwardProp` function
+- **Consistent naming**: Use descriptive names for transient props that clearly indicate their purpose
+
 ## Remember
 This is a professional TypeScript/React project. Every change should be:
 - **Systematic**: Based on proper CSS principles

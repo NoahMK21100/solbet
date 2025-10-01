@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import styled from 'styled-components'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { useSupabaseUser } from '../hooks/useSupabaseUser'
+import { supabase } from '../lib/supabase'
 
 // Styled components
 const ModalOverlay = styled.div`
@@ -170,7 +170,6 @@ interface RegistrationModalProps {
 
 export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistrationComplete }) => {
   const { publicKey, connected } = useWallet()
-  const { createUserProfile, isLoading, error } = useSupabaseUser()
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -178,6 +177,7 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistra
   })
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Check if form is valid
   const isFormValid = formData.username.trim() && formData.email.trim() && agreedToTerms
@@ -194,17 +194,23 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistra
     if (!isFormValid || isSubmitting || !publicKey) return
 
     setIsSubmitting(true)
+    setError(null)
 
     try {
-      // Create user profile directly - no verification needed
-      const profile = await createUserProfile({
-        username: formData.username.trim(),
-        email: formData.email.trim(),
-        avatar_url: '🎮' // Default avatar
-      })
+      if (supabase) {
+        // Update profile in Supabase
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            username: formData.username.trim(),
+            email: formData.email.trim(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('wallet_address', publicKey.toString())
 
-      if (profile) {
-        // Store additional data locally
+        if (updateError) throw updateError
+      } else {
+        // Fallback to localStorage if Supabase not configured
         const userData = {
           walletAddress: publicKey.toString(),
           username: formData.username.trim(),
@@ -215,14 +221,14 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistra
 
         localStorage.setItem('userData', JSON.stringify(userData))
         localStorage.setItem('isRegistered', 'true')
-        
-        // Complete registration
-        onRegistrationComplete()
       }
+      
+      // Complete registration
+      onRegistrationComplete()
       
     } catch (error) {
       console.error('Registration error:', error)
-      alert('Registration failed. Please try again.')
+      setError(error instanceof Error ? error.message : 'Registration failed. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -312,6 +318,17 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({ onRegistra
                 I agree that I am at least <strong>18 Years Old</strong> and agree to the terms and conditions.
               </CheckboxLabel>
             </CheckboxContainer>
+            
+            {error && (
+              <div style={{ 
+                color: '#ff6b6b', 
+                fontSize: '0.875rem', 
+                marginBottom: '1rem',
+                textAlign: 'center'
+              }}>
+                {error}
+              </div>
+            )}
             
             <CreateButton
               type="submit"

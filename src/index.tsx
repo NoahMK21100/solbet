@@ -8,6 +8,8 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { ChatProvider } from './hooks/useChatVisibility'
 import { DEFAULT_POOL, PLATFORM_CREATOR_ADDRESS, PLATFORM_CREATOR_FEE, PLATFORM_JACKPOT_FEE, PLATFORM_REFERRAL_FEE, RPC_ENDPOINT, TOKEN_METADATA, TOKEN_METADATA_FETCHER } from './constants'
 import './styles.css'
 
@@ -46,7 +48,11 @@ function Root() {
                       prefix: 'code',
                     }}
                   >
-                    <App />
+                    <ErrorBoundary>
+                      <ChatProvider>
+                        <App />
+                      </ChatProvider>
+                    </ErrorBoundary>
                   </GambaPlatformProvider>
                 </GambaProvider>
               </SendTransactionProvider>

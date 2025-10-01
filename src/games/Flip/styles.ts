@@ -110,8 +110,8 @@ export const GameContainer = styled.div`
   font-family: 'Flama', sans-serif;
   position: relative;
   overflow: hidden;
-  max-width: 1300px;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   min-height: calc(100vh - 110px);
 `
 
@@ -146,6 +146,8 @@ export const GameTitle = styled.h1`
   color: white;
   margin: 0 0 0.5rem 0;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
 `
 
 export const GameControls = styled.div`
@@ -208,7 +210,21 @@ export const BetLabel = styled.label`
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  margin-bottom: -0.25rem;
+  margin-bottom: 0.125rem;
+  margin-top: -0.25rem;
+  margin-left: 0.5rem;
+`
+
+export const SolPriceDisplay = styled.div`
+  font-size: 0.75rem;
+  color: #ccc;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  position: absolute;
+  top: -1.25rem;
+  right: 0.5rem;
 `
 
 export const SolanaIcon = styled.img`
@@ -251,6 +267,86 @@ export const BetInput = styled.input`
   
   &::placeholder {
     color: #666;
+  }
+`
+
+export const CustomBetInputWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(42, 42, 42, 0.8), rgba(30, 20, 50, 0.9));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 0.25px solid rgba(147, 51, 234, 0.6);
+  height: 44px;
+  min-width: 200px;
+  position: relative;
+`
+
+export const CustomBetInput = styled.input`
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 0.875rem;
+  font-family: 'Flama', sans-serif;
+  font-weight: 600;
+  outline: none;
+  
+  /* Remove number input arrows */
+  -moz-appearance: textfield;
+  
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  
+  &::placeholder {
+    color: white;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  
+  &:focus {
+    outline: none;
+  }
+`
+
+export const SolanaIconWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  border-right: 1px solid #3a3a3a;
+`
+
+export const MultiplierButtons = styled.div`
+  display: flex;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+`
+
+export const MultiplierButton = styled.button`
+  background: rgb(48, 48, 48);
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-size: 0.75rem;
+  font-family: 'Flama', sans-serif;
+  font-weight: 600;
+  padding: 0.375rem 0.5rem;
+  cursor: pointer;
+  box-shadow: 0 8px 5px #0000001f, inset 0 2px #ffffff12, inset 0 -2px #0000003d;
+  transition: all 0.25s ease;
+  transform: translateY(0);
+  
+  &:hover {
+    transform: translateY(-1px);
+  }
+  
+  &:active {
+    transform: translateY(0);
   }
 `
 
@@ -299,9 +395,9 @@ export const QuickBetButton = styled.button`
   height: 38px;
   width: 50px;
   padding: 0 0.5rem;
-  background-color: #3a3a3a;
+  background: rgb(48, 48, 48);
   color: white;
-  border: 1px solid #1D1D1D;
+  border: none;
   border-radius: 6px;
   font-family: 'Flama', sans-serif;
   font-size: 0.75rem;
@@ -312,56 +408,15 @@ export const QuickBetButton = styled.button`
   user-select: none;
   position: relative;
   overflow: hidden;
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter, backdrop-filter;
-  transition-duration: 0.3s;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
-  
-  /* Radial gradient overlay for hover effect */
-  &::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    z-index: 1;
-    height: 100%;
-    width: 100%;
-    background-image: radial-gradient(68.53% 169.15% at 50% -27.56%, #666 0%, #3a3a3a 100%);
-    opacity: 0;
-    mix-blend-mode: screen;
-    transition-property: opacity;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-duration: 0.5s;
-    border-radius: 10px;
-  }
-  
-  &:hover::after {
-    opacity: 1;
-  }
-  
-  /* Ensure text is above overlay */
-  & > * {
-    position: relative;
-    z-index: 2;
-  }
-  
-  /* Shiny highlight on top */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.8) 50%, transparent 100%);
-    border-radius: 0.75rem 0.75rem 0 0;
-    z-index: 2;
-  }
+  box-shadow: 0 8px 5px #0000001f, inset 0 2px #ffffff12, inset 0 -2px #0000003d;
+  transition: all 0.25s ease;
+  transform: translateY(0);
   
   &:hover {
     transform: translateY(-1px);
@@ -369,10 +424,6 @@ export const QuickBetButton = styled.button`
   
   &:active {
     transform: translateY(0);
-    box-shadow: 
-      0 1px 2px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.3);
   }
 `
 
@@ -584,11 +635,11 @@ export const PlayerInfo = styled.div`
   gap: 0.5rem;
 `
 
-export const PlayerAvatar = styled.div<{ $isWinner?: boolean; $isLoser?: boolean }>`
+export const PlayerAvatar = styled.div<{ $isWinner?: boolean; $isLoser?: boolean; $isBot?: boolean }>`
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: ${props => props.$isLoser ? '#333' : '#555'};
+  border-radius: 8px;
+  background: ${props => props.$isLoser ? '#333' : (props.$isBot ? 'linear-gradient(135deg, #6741ff, #8b5cf6)' : '#555')};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -599,6 +650,7 @@ export const PlayerAvatar = styled.div<{ $isWinner?: boolean; $isLoser?: boolean
   border: ${props => props.$isWinner ? '2px solid #8a6cff' : 'none'};
   position: relative;
   opacity: ${props => props.$isLoser ? 0.5 : 1};
+  overflow: hidden;
 `
 
 export const PlayerName = styled.span`
@@ -902,7 +954,7 @@ export const ModalParent = styled.div`
   padding: 4px;
   border-radius: 1rem;
   background: linear-gradient(180deg, #221E3A 0%, #232325 100%);
-  width: 820px !important;
+  width: 100% !important;
   height: 552px !important;
   overflow: hidden;
   box-sizing: border-box;
@@ -924,7 +976,7 @@ export const TransactionModal = styled.div`
   background: radial-gradient(57% 52% at 0% 0%, #5b3e8229, #0000), #1c1c1f;
   border-radius: 14px;
   padding: 1.5rem;
-  width: 812px !important;
+  width: 100% !important;
   height: 544px !important;
   position: relative;
   display: flex;
@@ -1183,13 +1235,13 @@ export const PlayerSection = styled.div`
   justify-content: flex-start;
 `
 
-export const PlayerSlot = styled.div<{ isWaiting?: boolean }>`
+export const PlayerSlot = styled.div<{ $isWaiting?: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1rem;
   position: relative;
-  opacity: ${props => props.isWaiting ? 0.6 : 1};
+  opacity: ${props => props.$isWaiting ? 0.6 : 1};
   
   @media (max-width: 768px) {
     gap: 0.5rem;
@@ -1212,17 +1264,17 @@ export const PlayerAvatarContainer = styled.div`
     0 0 0 12px #22222d;
 `
 
-export const PlayerAvatarModal = styled.div<{ isBot?: boolean }>`
+export const PlayerAvatarModal = styled.div<{ $isBot?: boolean }>`
   width: 100px;
   height: 100px;
   border-radius: 20px;
-  background: ${props => props.isBot ? '#6741ff' : '#42ff78'};
+  background: ${props => props.$isBot ? '#6741ff' : '#42ff78'};
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2.5rem;
   position: relative;
-  border: 2px solid ${props => props.isBot ? '#8a6cff' : '#5ae66a'};
+  border: 2px solid ${props => props.$isBot ? '#8a6cff' : '#5ae66a'};
   
   @media (max-width: 768px) {
     width: 80px;
@@ -1468,7 +1520,7 @@ export const GameResultModalParent = styled.div`
   padding: 4px;
   border-radius: 1rem;
   background: linear-gradient(180deg, #221E3A 0%, #232325 100%);
-  width: 820px;
+  width: 100%;
   height: 552px;
   overflow: hidden;
   box-sizing: border-box;
@@ -1478,7 +1530,7 @@ export const GameResultModal = styled.div`
   background: radial-gradient(57% 52% at 0% 0%, #5b3e8229, #0000), #1c1c1f;
   border-radius: 14px;
   padding: 1.5rem;
-  width: 812px;
+  width: 100%;
   height: 544px;
   position: relative;
   display: flex;
@@ -1574,17 +1626,17 @@ export const GameResultPlayerAvatarContainer = styled.div`
     0 0 0 12px #22222d;
 `
 
-export const GameResultPlayerAvatar = styled.div<{ isWinner?: boolean }>`
+export const GameResultPlayerAvatar = styled.div<{ $isWinner?: boolean }>`
   width: 100px;
   height: 100px;
   border-radius: 20px;
-  background: ${props => props.isWinner ? '#42ff78' : '#6741ff'};
+  background: ${props => props.$isWinner ? '#42ff78' : '#6741ff'};
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2.5rem;
   position: relative;
-  border: 2px solid ${props => props.isWinner ? '#5ae66a' : '#8a6cff'};
+  border: 2px solid ${props => props.$isWinner ? '#5ae66a' : '#8a6cff'};
 `
 
 export const GameResultPlayerInfo = styled.div`
@@ -1631,10 +1683,10 @@ export const GameResultBetAmountText = styled.span`
   font-weight: 600;
 `
 
-export const GameResultWinningAmount = styled.div<{ isWinner?: boolean }>`
-  background: ${props => props.isWinner ? '#42ff78' : 'transparent'};
-  color: ${props => props.isWinner ? 'black' : 'white'};
-  border: 1px solid ${props => props.isWinner ? '#5ae66a' : '#333'};
+export const GameResultWinningAmount = styled.div<{ $isWinner?: boolean }>`
+  background: ${props => props.$isWinner ? '#42ff78' : 'transparent'};
+  color: ${props => props.$isWinner ? 'black' : 'white'};
+  border: 1px solid ${props => props.$isWinner ? '#5ae66a' : '#333'};
   border-radius: 8px;
   padding: 0.5rem 0.75rem;
   display: flex;

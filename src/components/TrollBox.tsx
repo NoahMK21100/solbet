@@ -1,227 +1,434 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import styled, { css, keyframes } from 'styled-components'
-import useSWR from 'swr'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
+import { supabase } from '../lib/supabase'
+import { useSupabaseWalletSync } from '../hooks/useSupabaseWalletSync'
+import ProfilePopup from './ProfilePopup'
 
-type Msg = { user: string; text: string; ts: number }
-
-const fetcher = (url: string) => fetch(url).then(r => r.json())
-
-const stringToHslColor = (str: string, s: number, l: number): string => {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return `hsl(${hash % 360}, ${s}%, ${l}%)`
+// TypeScript interfaces
+interface ChatMessage {
+  id: string
+  username: string
+  message: string
+  timestamp: Date
+  walletAddress: string
+  level: number
 }
 
-const MinimizeIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-)
+interface TrollBoxProps {
+  isMinimized?: boolean
+}
 
-const ChatIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
-  </svg>
-)
-
-const fadeIn = keyframes`
-  from { opacity: 0; transform: translateY(5px) }
-  to   { opacity: 1; transform: translateY(0) }
-`
-
-const Wrapper = styled.div<{ $isMinimized: boolean }>`
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 998;
-  border-radius: ${({ $isMinimized }) => ($isMinimized ? '50%' : '12px')};
-  background: ${({ $isMinimized }) => ($isMinimized ? '#5e47ff' : 'rgba(28,28,35,0.85)')};
-  border: 1px solid
-    ${({ $isMinimized }) => ($isMinimized ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)')};
-  color: #eee;
-  font-size: 0.9rem;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-  ${({ $isMinimized }) => !$isMinimized && `backdrop-filter: blur(10px)`};
-  overflow: hidden;
+// Styled components
+const ChatContainer = styled.div<{ $isVisible: boolean }>`
   display: flex;
   flex-direction: column;
-  cursor: ${({ $isMinimized }) => ($isMinimized ? 'pointer' : 'default')};
-  transition: width 0.3s, height 0.3s, max-height 0.3s, border-radius 0.3s, background 0.3s;
+  height: auto;
+  min-height: calc(100vh - 90px);
+  background: rgba(20, 20, 20, 0.3);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  color: white;
+  font-family: 'Flama', sans-serif;
+  position: fixed;
+  top: 90px; /* Start exactly at bottom of header */
+  bottom: 0; /* Extend to bottom of viewport */
+  left: 0;
+  width: 350px;
+  z-index: 999;
+  transform: translateX(${props => props.$isVisible ? '0' : '-100%'});
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-top: 0; /* Remove any margin */
+  border-top: none; /* Remove border-top to connect seamlessly */
 
-  ${({ $isMinimized }) =>
-    $isMinimized
-      ? `
-    width: 56px;
-    height: 56px;
-    max-height: 56px;
-    justify-content: center;
-    align-items: center;
-    color: #fff;
-    & > *:not(${ExpandIconWrapper}) { display: none }
-  `
-      : `
-    width: 340px;
-    max-height: 450px;
-    min-height: 150px;
-  `}
-
-  @media (max-width: 480px) {
-    ${({ $isMinimized }) =>
-      $isMinimized
-        ? `
-      bottom: 16px;
-      right: 16px;
-    `
-        : `
-      width: calc(100% - 32px);
-      max-width: 300px;
-      max-height: 200px;
-      bottom: 16px;
-      right: 16px;
-    `}
+  @media (max-width: 1023px) {
+    display: none;
   }
 `
 
-const ContentContainer = styled.div<{ $isMinimized: boolean }>`
+const ChatHeader = styled.div`
+  padding: 1rem 1.5rem 1rem 1.5rem;
+  background: transparent;
   display: flex;
-  flex-direction: column;
-  flex-grow: 1;
-  min-height: 0;
-  opacity: ${({ $isMinimized }) => ($isMinimized ? 0 : 1)};
-  transition: opacity 0.2s;
-  pointer-events: ${({ $isMinimized }) => ($isMinimized ? 'none' : 'auto')};
+  align-items: stretch;
+  justify-content: space-between;
 `
 
-const Header = styled.div`
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+const ChatTitleContainer = styled.div`
+  background: linear-gradient(135deg, rgba(42, 42, 42, 0.8), rgba(30, 20, 50, 0.9));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(151, 151, 151, 0.3);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255,255,255,0.05);
-  color: #fff;
-  cursor: pointer;
+  gap: 1rem;
+  flex: 1;
+  margin-right: 0.5rem;
 `
 
-const HeaderTitle = styled.span`
-  flex-grow: 1;
-  font-size: 0.9rem;
+const ChatTitle = styled.h3`
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: white;
+  font-family: 'Inter', 'Inter Fallback', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 `
 
-const HeaderStatus = styled.span`
-  font-size: 0.7rem;
-  color: #a0a0a0;
-  opacity: 0.8;
-  margin: 0 8px;
-`
-
-const MinimizeButton = styled.button`
-  background: none;
+const CollapseButton = styled.button`
+  background: rgb(48, 48, 48);
   border: none;
-  color: #a0a0a0;
-  padding: 4px;
+  color: white;
   cursor: pointer;
-  border-radius: 4px;
-
-  &:hover {
-    background: rgba(255,255,255,0.1);
-    color: #fff;
-  }
-`
-
-const ExpandIconWrapper = styled.div`
+  width: 42px;
+  height: 48px;
+  border-radius: 0.5rem;
+  transition: all 0.25s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 8px 5px #0000001f, inset 0 2px #ffffff12, inset 0 -2px #0000003d;
+  transform: translateY(0);
+  align-self: center;
+  
+  &:hover {
+    transform: translateY(-2px);
+  }
+  
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+  }
+  
+  svg {
+    width: 12px;
+    height: 12px;
+  }
 `
 
-const Log = styled.div`
+const LiveChatPotSection = styled.div`
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.2), rgba(103, 65, 255, 0.3));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1rem 1.5rem 1rem 1.5rem;
+  min-height: 3rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: all 0.25s ease;
+  
+  &:hover {
+    transform: translateY(-1px);
+  }
+`
+
+const LiveChatPotTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #42ff78;
+  font-weight: 700;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+`
+
+const LiveChatPotAmount = styled.div`
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+`
+
+const LiveChatPotAvatars = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+`
+
+const Avatar = styled.div`
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #42ff78;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: black;
+`
+
+const LiveChatPotTime = styled.div`
+  color: #888;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+`
+
+const ChatToggleButton = styled.button<{ $isVisible: boolean }>`
+  background: rgb(48, 48, 48);
+  border: none;
+  color: white;
+  cursor: pointer;
+  width: 42px;
+  height: 40px;
+  border-radius: 0.5rem;
+  transition: all 0.25s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 5px #0000001f, inset 0 2px #ffffff12, inset 0 -2px #0000003d;
+  transform: translateY(0);
+  position: fixed;
+  top: 106px; /* Aligned with the CollapseButton position (90px + 16px padding) */
+  left: 0;
+  z-index: 998; /* Below chat container but above other content */
+  transform: translateX(${props => props.$isVisible ? '0' : '-100%'}) translateY(0);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-top-right-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  
+  &:hover {
+    transform: translateX(${props => props.$isVisible ? '0' : '-100%'}) translateY(-2px);
+  }
+  
+  &:active {
+    transform: translateX(${props => props.$isVisible ? '0' : '-100%'}) translateY(0);
+    box-shadow: 0 1px 2px #0000001f, inset 0 2px #0000003d, inset 0 -2px #ffffff12;
+  }
+  
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+`
+
+const MessagesContainer = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 10px;
+  padding: 1rem 1.5rem 0.5rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  min-height: 80px;
-  font-size: 0.85rem;
+  gap: 0.75rem;
+  max-height: calc(100vh - 200px); /* Ensure it doesn't exceed viewport */
+  
+  /* Hide scrollbar but keep functionality */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
 
   &::-webkit-scrollbar {
-    width: 5px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.2);
-    border-radius: 2px;
+    display: none; /* WebKit */
   }
 `
 
-const MessageItem = styled.div<{ $isOwn?: boolean }>`
-  line-height: 1.3;
-  animation: ${fadeIn} 0.3s ease-out;
+const MessageItem = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(39, 47, 51, 0.32);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  border: 1px solid rgba(38, 46, 49, 0.8);
+  height: 65px;
+  box-shadow: 
+    0 0 0 2px rgba(55, 55, 60, 0.8),
+    0 0 0 4px rgba(0, 0, 0, 0.8),
+    0 0 0 6px rgba(34, 34, 45, 0.8);
 `
 
-const Username = styled.strong<{ userColor: string }>`
+const MessageAvatar = styled.div`
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4c1d95, #a855f7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: ${({ userColor }) => userColor};
-  margin-right: 0.4em;
+  color: white;
+  flex-shrink: 0;
+  box-shadow:
+    0 0 0 3px #37373c,
+    0 0 0 6px #22222d;
+`
+
+const MessageContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+`
+
+const MessageHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+`
+
+const Username = styled.span<{ $userColor: string }>`
+  font-weight: 600;
+  color: ${({ $userColor }) => $userColor};
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: underline;
+`
+
+const UserLevel = styled.span`
+  background-color: #333;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.25rem;
 `
 
 const Timestamp = styled.span`
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: #888;
-  opacity: 0.7;
-  margin-left: 0.4em;
 `
 
-const InputRow = styled.div`
+const MessageText = styled.p`
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: white;
+  word-wrap: break-word;
+`
+
+const ChatInputContainer = styled.div`
+  padding: 0.5rem 1.5rem 1rem 1.5rem;
   display: flex;
-  border-top: 1px solid rgba(255,255,255,0.08);
-  background: rgba(0,0,0,0.1);
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 0.5rem;
 `
 
-const TextInput = styled.input`
+const ChatInputRow = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+`
+
+const ChatInputHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+`
+
+const ChatInputWrapper = styled.div`
+  position: relative;
   flex: 1;
-  background: transparent;
-  border: none;
-  padding: 10px;
-  color: #eee;
-  outline: none;
-  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+`
 
+const ChatInput = styled.input<{ disabled?: boolean; $isConnect?: boolean }>`
+  width: 100%;
+  padding: 0.75rem ${props => props.$isConnect ? '4rem' : '2.5rem'} 0.75rem 0.75rem;
+  border: 1px solid rgb(29, 29, 29);
+  border-radius: 8px;
+  background-color: ${props => props.disabled ? 'rgb(15, 15, 15)' : 'rgb(20, 20, 20)'};
+  color: ${props => props.disabled ? 'rgb(80, 80, 80)' : 'white'};
+  font-family: 'Flama', sans-serif;
+  font-size: 0.875rem;
+  opacity: ${props => props.disabled ? 0.5 : 1};
+  
+  &:focus {
+    outline: none;
+    border-color: ${props => props.disabled ? 'rgb(29, 29, 29)' : '#6741ff'};
+  }
+  
   &::placeholder {
-    color: #777;
-    opacity: 0.8;
+    color: ${props => props.disabled ? 'rgb(60, 60, 60)' : '#666'};
   }
 `
 
-const SendBtn = styled.button`
-  background: #5e47ff;
+const InlineButton = styled.button<{ $isConnect?: boolean }>`
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: ${props => props.$isConnect ? '3.5rem' : '2rem'};
+  height: ${props => props.$isConnect ? '2rem' : '2rem'};
+  padding: 0;
+  background-color: #6741ff;
+  color: white;
   border: none;
-  padding: 0 12px;
-  cursor: pointer;
+  border-radius: 4px;
+  font-family: 'Flama', sans-serif;
+  font-size: ${props => props.$isConnect ? '0.75rem' : '0.625rem'};
   font-weight: 600;
-  color: #fff;
-  font-size: 0.9rem;
-
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
   &:hover:not(:disabled) {
-    background: #6f5aff;
+    background-color: #5a3ae6;
   }
-
-  &:active:not(:disabled) {
-    background: #4d38cc;
-    transform: scale(0.98);
-  }
-
+  
   &:disabled {
-    opacity: 0.5;
+    background-color: #444;
     cursor: not-allowed;
+    opacity: 0.6;
   }
 `
+
+const PlayerCount = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #888;
+  font-weight: 600;
+  font-family: 'Flama', sans-serif;
+  background: transparent;
+  font-size: 0.75rem;
+  
+  img {
+    filter: brightness(1.2);
+  }
+`
+
+const ChatRules = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #888;
+  font-weight: 500;
+  font-family: 'Flama', sans-serif;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  margin-top: 0.5rem;
+  
+  &:hover {
+    color: #6741ff;
+  }
+`
+
 
 const LoadingText = styled.div`
   text-align: center;
@@ -231,154 +438,367 @@ const LoadingText = styled.div`
   font-size: 0.8rem;
 `
 
-export default function TrollBox() {
+// Helper function for user colors
+const stringToHslColor = (str: string, s: number, l: number): string => {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return `hsl(${hash % 360}, ${s}%, ${l}%)`
+}
+
+export default function TrollBox({ isMinimized: propIsMinimized = false }: TrollBoxProps) {
   const { publicKey, connected } = useWallet()
   const walletModal = useWalletModal()
-  const [isMinimized, setIsMinimized] = useState(false)
-  const [cooldown, setCooldown] = useState(0)
+  const { profile } = useSupabaseWalletSync()
+  const [internalMinimized, setInternalMinimized] = useState(false)
+  
+  // Use prop if provided, otherwise use internal state
+  const isMinimized = internalMinimized
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [newMessage, setNewMessage] = useState('')
+  const [inputValue, setInputValue] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [showProfilePopup, setShowProfilePopup] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<{ walletAddress: string; username: string; position: { x: number; y: number } } | null>(null)
 
-  const anonFallback = useMemo(
-    () => 'anon' + Math.floor(Math.random() * 1e4).toString().padStart(4, '0'),
-    [],
-  )
-  const userName =
-    connected && publicKey ? publicKey.toBase58().slice(0, 6) : anonFallback
+  const userName = profile?.username || (connected && publicKey ? publicKey.toBase58().slice(0, 6) : 'anon' + Math.floor(Math.random() * 1e4).toString().padStart(4, '0'))
 
-  const swrKey =
-    isMinimized || (typeof document !== 'undefined' && document.hidden)
-      ? null
-      : '/api/chat'
-  const { data: messages = [], error, mutate } = useSWR<Msg[]>(swrKey, fetcher, {
-    refreshInterval: 8000,
-    dedupingInterval: 7500,
-  })
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const [text, setText] = useState('')
-  const [isSending, setIsSending] = useState(false)
-  const logRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  // Fetch messages from Supabase
+  const fetchMessages = async () => {
+    if (isMinimized || (typeof document !== 'undefined' && document.hidden)) return
+    
+    try {
+      setIsLoading(true)
+      
+      const { data, error: fetchError } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .eq('channel', 'global')
+        .order('created_at', { ascending: true })
+        .limit(50)
+
+      if (fetchError) {
+        // If table doesn't exist or RLS policy blocks, just show empty chat
+        if (fetchError.code === 'PGRST116' || fetchError.code === '42501') {
+          console.log('Chat table not found or RLS policy blocks, showing empty chat')
+          setMessages([])
+          return
+        }
+        throw fetchError
+      }
+      
+      // Convert Supabase format to ChatMessage format
+      const formattedMessages: ChatMessage[] = (data || []).map((msg: any) => ({
+        id: msg.id,
+        username: msg.username || 'Anonymous',
+        message: msg.message || '',
+        timestamp: new Date(msg.created_at),
+        walletAddress: msg.wallet_address || 'unknown',
+        level: 1
+      }))
+      
+      setMessages(formattedMessages)
+    } catch (err) {
+      console.error('Error fetching messages:', err)
+      // Don't show error, just show empty chat
+      setMessages([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Send message to Supabase
+  const sendMessage = async (messageText: string) => {
+    if (!connected || !publicKey || !profile) return
+
+    try {
+      const { error: insertError } = await supabase
+        .from('chat_messages')
+        .insert({
+          wallet_address: publicKey.toString(),
+          username: profile.username || publicKey.toBase58().slice(0, 6),
+          message: messageText,
+          channel: 'global'
+        })
+
+      if (insertError) {
+        // If table doesn't exist or RLS policy blocks, just show a local message
+        if (insertError.code === 'PGRST116' || insertError.code === '42501') {
+          console.log('Chat table not found or RLS policy blocks, adding local message')
+          const localMessage: ChatMessage = {
+            id: Date.now().toString(),
+            username: profile.username || publicKey.toBase58().slice(0, 6),
+            message: messageText,
+            timestamp: new Date(),
+            walletAddress: publicKey.toString(),
+            level: 1
+          }
+          setMessages(prev => [...prev, localMessage])
+          return
+        }
+        throw insertError
+      }
+      
+      // Refresh messages after sending
+      await fetchMessages()
+    } catch (err) {
+      console.error('Error sending message:', err)
+      // Don't show error, just add local message
+      const localMessage: ChatMessage = {
+        id: Date.now().toString(),
+        username: profile.username || publicKey.toBase58().slice(0, 6),
+        message: messageText,
+        timestamp: new Date(),
+        walletAddress: publicKey.toString(),
+        level: 1
+      }
+      setMessages(prev => [...prev, localMessage])
+    }
+  }
 
   const userColors = useMemo(() => {
     const map: Record<string, string> = {}
     messages.forEach(m => {
-      if (!map[m.user]) map[m.user] = stringToHslColor(m.user, 70, 75)
+      if (!map[m.username]) map[m.username] = stringToHslColor(m.username, 70, 75)
     })
     if (!map[userName]) map[userName] = stringToHslColor(userName, 70, 75)
     return map
   }, [messages, userName])
 
-  async function send() {
-    if (!connected) return walletModal.setVisible(true)
-    const txt = text.trim()
-    if (!txt || isSending || cooldown > 0) return
-    setIsSending(true)
-    const id = Date.now()
-    mutate([...messages, { user: userName, text: txt, ts: id }], false)
-    setText('')
+  const toggleMinimize = () => {
+    setInternalMinimized(v => !v)
+  }
+
+  const handleUsernameClick = (e: React.MouseEvent, walletAddress: string, username: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    const rect = e.currentTarget.getBoundingClientRect()
+    setSelectedUser({
+      walletAddress,
+      username,
+      position: {
+        x: rect.left,
+        y: rect.top - 10
+      }
+    })
+    setShowProfilePopup(true)
+  }
+
+  const closeProfilePopup = () => {
+    setShowProfilePopup(false)
+    setSelectedUser(null)
+  }
+
+  // Handle sending a new message
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || !connected || !publicKey || isLoading) return
+
+    setIsLoading(true)
+    
     try {
-      await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: userName, text: txt }),
-      })
-      mutate()
-      setCooldown(5)
-    } catch {
-      mutate()
+      await sendMessage(inputValue.trim())
+      setInputValue('')
+    } catch (error) {
+      console.error('Failed to send message:', error)
     } finally {
-      setIsSending(false)
+      setIsLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (!isMinimized && logRef.current) {
-      logRef.current.scrollTo({
-        top: logRef.current.scrollHeight,
-        behavior: 'smooth',
-      })
+  // Handle Enter key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
     }
-  }, [messages, isMinimized])
+  }
+
+  // Format timestamp
+  const formatTimestamp = (timestamp: Date): string => {
+    const now = new Date()
+    const diff = now.getTime() - timestamp.getTime()
+    const minutes = Math.floor(diff / 60000)
+    
+    if (minutes < 1) return 'now'
+    if (minutes < 60) return `${minutes}m ago`
+    
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    
+    return timestamp.toLocaleDateString()
+  }
+
+  // Auto-scroll to bottom when new messages arrive
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
 
   useEffect(() => {
-    if (!isMinimized && window.innerWidth > 480) {
-      const t = setTimeout(() => inputRef.current?.focus(), 300)
-      return () => clearTimeout(t)
-    }
+    scrollToBottom()
+  }, [messages])
+
+  // Fetch messages on mount and when not minimized
+  useEffect(() => {
+    fetchMessages()
   }, [isMinimized])
 
+  // Set up polling for new messages
   useEffect(() => {
-    if (cooldown <= 0) return
-    const timer = setTimeout(() => setCooldown(cooldown - 1), 1000)
-    return () => clearTimeout(timer)
-  }, [cooldown])
+    if (isMinimized || (typeof document !== 'undefined' && document.hidden)) return
 
-  const fmtTime = (ts: number) =>
-    ts > Date.now() - 5000
-      ? 'sending…'
-      : new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const interval = setInterval(() => {
+      fetchMessages()
+    }, 3000)
 
-  const toggleMinimize = () => setIsMinimized(v => !v)
+    return () => clearInterval(interval)
+  }, [isMinimized])
+
+  // Prevent scroll events from bubbling up to main page
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      e.stopPropagation()
+    }
+
+    const chatContainer = document.querySelector('[data-chat-container]')
+    if (chatContainer) {
+      chatContainer.addEventListener('wheel', handleScroll, { passive: false })
+      chatContainer.addEventListener('scroll', handleScroll, { passive: false })
+    }
+
+    return () => {
+      if (chatContainer) {
+        chatContainer.removeEventListener('wheel', handleScroll)
+        chatContainer.removeEventListener('scroll', handleScroll)
+      }
+    }
+  }, [])
 
   return (
-    <Wrapper $isMinimized={isMinimized}>
-      {isMinimized && (
-        <ExpandIconWrapper onClick={toggleMinimize}>
-          <ChatIcon />
-        </ExpandIconWrapper>
-      )}
-      <ContentContainer $isMinimized={isMinimized}>
-        <Header onClick={toggleMinimize}>
-          <HeaderTitle>Troll Box</HeaderTitle>
-          <HeaderStatus>
-            {messages.length ? `${messages.length} msgs` : 'Connecting…'}
-          </HeaderStatus>
-          <MinimizeButton>
-            <MinimizeIcon />
-          </MinimizeButton>
-        </Header>
-        <Log ref={logRef}>
-          {!messages.length && !error && <LoadingText>Loading messages…</LoadingText>}
-          {error && <LoadingText style={{ color: '#ff8080' }}>Error loading chat.</LoadingText>}
-          {messages.map((m, i) => (
-            <MessageItem key={m.ts || i} $isOwn={m.user === userName}>
-              <Username userColor={userColors[m.user]}>
-                {m.user.slice(0, 6)}
+    <>
+      {/* Chat Toggle Button - Shows when chat is hidden */}
+      <ChatToggleButton $isVisible={isMinimized} onClick={toggleMinimize}>
+        <img src="/002-right.png" alt="Open Chat" style={{ width: '12px', height: '12px' }} />
+      </ChatToggleButton>
+
+      <ChatContainer $isVisible={!isMinimized} data-chat-container>
+        {/* Chat Header with Title and Collapse Button */}
+        <ChatHeader>
+          <ChatTitleContainer>
+            <ChatTitle>SOLBET Chat</ChatTitle>
+            <PlayerCount>
+              <img src="/9d7e91c7-872f-4d7a-bd5e-53d7181e6bbf.svg" alt="Online" style={{ width: '12px', height: '12px' }} />
+              <span>{messages.length}</span>
+            </PlayerCount>
+          </ChatTitleContainer>
+          <CollapseButton onClick={toggleMinimize}>
+            <img src="/002-right.png" alt="Collapse" style={{ width: '12px', height: '12px', transform: 'rotate(180deg)' }} />
+          </CollapseButton>
+        </ChatHeader>
+
+
+        <MessagesContainer 
+          onWheel={(e) => e.stopPropagation()}
+          onScroll={(e) => e.stopPropagation()}
+        >
+          {isLoading && <LoadingText>Loading messages…</LoadingText>}
+          {!isLoading && messages.length === 0 && <LoadingText>No messages yet. Be the first to chat!</LoadingText>}
+          {messages.map((message) => (
+            <MessageItem key={message.id}>
+              <MessageAvatar>
+                <img 
+                  src="/solly.png" 
+                  alt="Default Avatar" 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+                />
+              </MessageAvatar>
+              <MessageContent>
+                <MessageHeader>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <Username 
+                      $userColor={userColors[message.username]}
+                      onClick={(e) => handleUsernameClick(e, message.walletAddress, message.username)}
+                    >
+                      {message.username}
               </Username>
-              : {m.text}
-              <Timestamp>{fmtTime(m.ts)}</Timestamp>
+                    <UserLevel>{message.level}</UserLevel>
+                  </div>
+                  <Timestamp>{formatTimestamp(message.timestamp)}</Timestamp>
+                </MessageHeader>
+                <MessageText>{message.message}</MessageText>
+              </MessageContent>
             </MessageItem>
           ))}
-        </Log>
-        <InputRow>
-          <TextInput
-            ref={inputRef}
-            value={text}
-            placeholder={connected ? 'Say something…' : 'Connect wallet to chat'}
-            onChange={e => setText(e.target.value)}
-            onClick={() => !connected && walletModal.setVisible(true)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                send()
-              }
-            }}
-            disabled={isSending || !swrKey}
-            maxLength={200}
-          />
-          <SendBtn
-            onClick={send}
-            disabled={
-              !connected ||
-              isSending ||
-              cooldown > 0 ||
-              !text.trim() ||
-              !swrKey
-            }
-          >
-            {isSending ? '…' : cooldown > 0 ? `Wait ${cooldown}s` : 'Send'}
-          </SendBtn>
-        </InputRow>
-      </ContentContainer>
-    </Wrapper>
+          <div ref={messagesEndRef} />
+        </MessagesContainer>
+
+        <ChatInputContainer>
+          <ChatInputRow>
+            {!connected ? (
+              <ChatInputWrapper>
+                <ChatInput
+                  type="text"
+                  placeholder="Connect wallet to chat..."
+                  value=""
+                  disabled={true}
+                  $isConnect={true}
+                  maxLength={500}
+                />
+                <InlineButton
+                  onClick={() => walletModal.setVisible(true)}
+                  disabled={false}
+                  $isConnect={true}
+                >
+                  Connect
+                </InlineButton>
+              </ChatInputWrapper>
+            ) : (
+              <ChatInputWrapper>
+                <ChatInput
+                  type="text"
+                  placeholder="Type your message..."
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  disabled={isLoading}
+                  maxLength={500}
+                />
+                <InlineButton
+                  onClick={handleSendMessage}
+                  disabled={!inputValue.trim() || isLoading}
+                  $isConnect={false}
+                >
+                  {isLoading ? (
+                    '...'
+                  ) : (
+                    <img src="/72a1b1a6-59d7-4a3f-8d88-9056e111c1de.svg" alt="Send" style={{ width: '16px', height: '16px' }} />
+                  )}
+                </InlineButton>
+              </ChatInputWrapper>
+            )}
+          </ChatInputRow>
+          
+          <ChatRules>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+            </svg>
+            <span>Chat Rules</span>
+          </ChatRules>
+        </ChatInputContainer>
+
+      </ChatContainer>
+
+      {showProfilePopup && selectedUser && (
+        <ProfilePopup
+          walletAddress={selectedUser.walletAddress}
+          username={selectedUser.username}
+          onClose={closeProfilePopup}
+          position={selectedUser.position}
+        />
+      )}
+    </>
   )
 }

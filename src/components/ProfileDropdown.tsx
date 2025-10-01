@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import styled from 'styled-components'
 import { useLocation } from 'react-router-dom'
-// TODO: Replace with Supabase user data hooks
-// import { getUsername, getUserAvatarOrDefault, hasCustomAvatar } from '../utils'
+import { useSupabaseWalletSync } from '../hooks/useSupabaseWalletSync'
 
 // Styled components
 const ProfileContainer = styled.div`
@@ -29,9 +28,9 @@ const ProfileButton = styled.button`
 `
 
 const ProfileAvatar = styled.div`
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
   background: linear-gradient(135deg, #4c1d95, #a855f7);
   display: flex;
   align-items: center;
@@ -46,7 +45,7 @@ const ProfileAvatar = styled.div`
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 8px;
+    border-radius: 6px;
   }
 `
 
@@ -104,7 +103,7 @@ const HamburgerIcon = styled.div`
   }
 `
 
-const Dropdown = styled.div<{ isOpen: boolean }>`
+const Dropdown = styled.div<{ $isOpen: boolean }>`
   position: absolute;
   top: 100%;
   right: 0;
@@ -115,9 +114,9 @@ const Dropdown = styled.div<{ isOpen: boolean }>`
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   min-width: 200px;
   z-index: 1000;
-  opacity: ${props => props.isOpen ? 1 : 0};
-  visibility: ${props => props.isOpen ? 'visible' : 'hidden'};
-  transform: ${props => props.isOpen ? 'translateY(0)' : 'translateY(-10px)'};
+  opacity: ${props => props.$isOpen ? 1 : 0};
+  visibility: ${props => props.$isOpen ? 'visible' : 'hidden'};
+  transform: ${props => props.$isOpen ? 'translateY(0)' : 'translateY(-10px)'};
   transition: all 0.2s ease;
 `
 
@@ -182,20 +181,15 @@ export const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
   onDisconnectClick
 }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [userData, setUserData] = useState<UserData | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
+  const { profile, walletAddress } = useSupabaseWalletSync()
 
-  useEffect(() => {
-    const storedUserData = localStorage.getItem('userData')
-    if (storedUserData) {
-      const parsed = JSON.parse(storedUserData)
-      setUserData({
-        username: parsed.username,
-        walletAddress: parsed.walletAddress
-      })
-    }
-  }, [])
+  // Convert Supabase profile to userData format
+  const userData: UserData | null = profile ? {
+    username: profile.username || 'Anonymous',
+    walletAddress: walletAddress || profile.wallet_address
+  } : null
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -209,6 +203,7 @@ export const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Early return after all hooks
   if (!userData) {
     return null
   }
@@ -238,7 +233,6 @@ export const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
         </ProfileAvatar>
         <ProfileInfo>
           <Username>{userData.username}</Username>
-          <WalletAddress>{formatWalletAddress(userData.walletAddress)}</WalletAddress>
         </ProfileInfo>
       </ProfileButton>
       
@@ -250,7 +244,7 @@ export const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
         </HamburgerIcon>
       </HamburgerButton>
 
-      <Dropdown isOpen={isOpen}>
+          <Dropdown $isOpen={isOpen}>
         <DropdownItem onClick={() => handleItemClick(onProfileClick)}>
           <img src="/003-user.png" alt="Profile" style={{ 
             width: '20px', 

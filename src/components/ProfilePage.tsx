@@ -1,47 +1,57 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
 import styled from 'styled-components'
-// TODO: Replace with Supabase user data hooks
-// import { getUsername, getUserAvatarOrDefault, hasCustomAvatar } from '../utils'
+import { supabase } from '../lib/supabase'
+// import { useSupabaseWalletSync } from '../hooks/useSupabaseWalletSync'
 
 // Styled components
 const ProfilePageContainer = styled.div`
   display: flex;
   min-height: 100vh;
-  background: #0f0f0f;
+  background: transparent;
+  position: relative;
+  color: white;
 `
 
 const Sidebar = styled.div`
-  width: 250px;
-  background: #1a1a1a;
-  border-right: 1px solid #2d2d2d;
-  padding: 2rem 0;
+  width: 320px;
+  background: transparent;
+  border-right: none;
+  padding: 3rem 0 2rem 1rem;
+  box-shadow: none;
 `
 
-const SidebarItem = styled.button<{ active: boolean }>`
+const SidebarItem = styled.button<{ $active: boolean }>`
   width: 100%;
   padding: 1rem 2rem;
-  background: ${props => props.active ? '#6741ff' : 'transparent'};
-  border: none;
-  color: ${props => props.active ? 'white' : 'white'};
+  background: ${props => props.$active ? 'rgba(255, 255, 255, 0.05)' : 'transparent'};
+  border: ${props => props.$active ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid transparent'};
+  color: ${props => props.$active ? 'white' : '#a0a0a0'};
   font-family: 'Inter', sans-serif;
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 1rem;
+  margin: 0.15rem 0;
+  border-radius: 10px;
+  position: relative;
+  line-height: 1;
   
   &:hover {
-    background: ${props => props.active ? '#6741ff' : 'rgba(255, 255, 255, 0.1)'};
+    background: rgba(255, 255, 255, 0.05);
     color: white;
+    border-color: rgba(255, 255, 255, 0.1);
   }
   
   img {
-    filter: ${props => props.active ? 'none' : 'brightness(0) saturate(100%) invert(85%) sepia(0%) saturate(0%) hue-rotate(93deg) brightness(88%) contrast(86%)'};
+    width: 22px;
+    height: 22px;
+    filter: ${props => props.$active ? 'none' : 'brightness(0) saturate(100%) invert(60%) sepia(0%) saturate(0%) hue-rotate(93deg) brightness(90%) contrast(86%)'};
   }
 `
 
@@ -61,7 +71,7 @@ const DisconnectButton = styled.button`
   align-items: center;
   gap: 0.5rem;
   margin-top: 2rem;
-  border-top: 1px solid #2d2d2d;
+  line-height: 1;
   
   &:hover {
     background: rgba(255, 68, 68, 0.1);
@@ -76,37 +86,52 @@ const DisconnectButton = styled.button`
 
 const MainContent = styled.div`
   flex: 1;
-  padding: 2rem;
+  padding: 3rem 2rem;
   overflow-y: auto;
+  background: transparent;
+  position: relative;
 `
 
 const ProfileHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
+  gap: 2rem;
+  margin-bottom: 3rem;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 1;
 `
 
-const ProfileAvatar = styled.div<{ hasCustomAvatar?: boolean }>`
-  width: 80px;
-  height: 80px;
-  border-radius: 12px;
-  background: ${props => props.hasCustomAvatar ? 'transparent' : 'linear-gradient(135deg, #4c1d95, #a855f7)'};
+const ProfileAvatar = styled.div<{ $hasCustomAvatar?: boolean }>`
+  width: 100px;
+  height: 100px;
+  border-radius: 20px;
+  background: ${props => props.$hasCustomAvatar ? 'transparent' : 'linear-gradient(135deg, #6741ff, #8b5cf6)'};
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
-  font-weight: 600;
+  font-size: 2.5rem;
+  font-weight: 700;
   color: white;
-  box-shadow: 0 0 0 3px #37373c, 0 0 0 6px #22222d;
+  box-shadow: 0 8px 32px rgba(103, 65, 255, 0.3), 0 0 0 4px rgba(255, 255, 255, 0.1);
   position: relative;
   overflow: hidden;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 40px rgba(103, 65, 255, 0.4), 0 0 0 4px rgba(255, 255, 255, 0.2);
+  }
   
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 12px;
+    border-radius: 20px;
   }
 `
 
@@ -152,14 +177,14 @@ const UploadIcon = styled.div`
   background-position: center;
 `
 
-const AvatarModalOverlay = styled.div<{ isOpen: boolean }>`
+const AvatarModalOverlay = styled.div<{ $isOpen: boolean }>`
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.7);
-  display: ${props => props.isOpen ? 'flex' : 'none'};
+  display: ${props => props.$isOpen ? 'flex' : 'none'};
   align-items: center;
   justify-content: center;
   z-index: 10000;
@@ -272,22 +297,26 @@ const UsernameContainer = styled.div`
 
 const Username = styled.h1`
   font-family: 'Airstrike', sans-serif;
-  font-size: 2rem;
+  font-size: 2.5rem;
   font-weight: 700;
   color: white;
   margin: 0;
   text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 20px rgba(103, 65, 255, 0.5);
 `
 
 const Level = styled.div`
   display: inline-block;
-  background: linear-gradient(135deg, #4c1d95, #a855f7);
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  background: #42ff78;
+  color: #000;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
   margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 `
 
 const JoinDate = styled.p`
@@ -304,10 +333,10 @@ const XPBar = styled.div`
   overflow: hidden;
 `
 
-const XPProgress = styled.div<{ progress: number }>`
+const XPProgress = styled.div<{ $progress: number }>`
   height: 100%;
   background: linear-gradient(90deg, #6741ff, #42ff78);
-  width: ${props => props.progress}%;
+  width: ${props => props.$progress}%;
   transition: width 0.3s ease;
 `
 
@@ -326,10 +355,13 @@ const ContentSection = styled.div`
 `
 
 const FormSection = styled.div`
-  background: #1a1a1a;
-  border: 1px solid #2d2d2d;
-  border-radius: 12px;
-  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 2rem;
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 1;
 `
 
 const SectionTitle = styled.h3`
@@ -358,15 +390,17 @@ const InputContainer = styled.div`
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  border: 1px solid #2d2d2d;
-  border-radius: 8px;
-  background: #141414;
-  padding: 0.75rem 1rem;
-  transition: border-color 0.2s ease;
+  gap: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1rem 1.25rem;
+  transition: all 0.3s ease;
   
   &:focus-within {
     border-color: #6741ff;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 3px rgba(103, 65, 255, 0.1);
   }
 `
 
@@ -375,9 +409,14 @@ const Input = styled.input`
   border: none;
   background: transparent;
   color: white;
-  font-size: 0.875rem;
+  font-size: 1rem;
   padding: 0;
   cursor: text;
+  font-weight: 500;
+  
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
   
   &:focus {
     outline: none;
@@ -390,9 +429,6 @@ const Input = styled.input`
 `
 
 const ButtonContainer = styled.div`
-  background: linear-gradient(to bottom, #221e3a, #232325);
-  padding: 2px;
-  border-radius: 0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -479,11 +515,17 @@ const ViewButton = styled.button`
 `
 
 const BalanceSection = styled.div`
-  background: #1a1a1a;
-  border: 1px solid #2d2d2d;
-  border-radius: 12px;
-  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 1.5rem 1rem;
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 1;
+  height: fit-content;
 `
+
+// Statistics styled components removed - will be added later
 
 const BalanceTitle = styled.h3`
   font-family: 'Inter', sans-serif;
@@ -496,17 +538,18 @@ const BalanceTitle = styled.h3`
 const BalanceAmount = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: space-between;
+  gap: 0.75rem;
   margin-bottom: 1rem;
 `
 
 const SolanaIcon = styled.img`
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 `
 
 const BalanceText = styled.span`
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 700;
   color: white;
 `
@@ -515,48 +558,54 @@ const ClaimButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.375rem;
+  gap: 0.5rem;
   height: 2.5rem;
   min-height: 2.5rem;
-  width: 100%;
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-  padding-top: 0.75rem;
-  padding-bottom: 0.75rem;
-  background-color: #42ff78;
-  border: 1px solid #1D1D1D;
-  border-radius: 0.625rem;
+  width: auto;
+  min-width: 120px;
+  padding: 0 1rem;
+  background: #42ff78;
+  border: none;
+  border-radius: 12px;
   color: #000;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.025em;
+  letter-spacing: 0.05em;
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: 1rem;
+  transition: all 0.3s ease;
   
   &:hover {
-    background-color: #38e066;
+    background: #38e066;
+    transform: translateY(-2px);
+  }
+  
+  &:active {
+    transform: translateY(0);
   }
   
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    transform: translateY(0);
   }
 `
 
 const BalanceDisplay = styled.div`
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: 1px solid #2d2d2d;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  background: #141414;
+  background: rgba(255, 255, 255, 0.05);
   color: white;
-  font-size: 0.875rem;
+  font-size: 1rem;
+  font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
   cursor: not-allowed;
+  height: 2.5rem;
+  flex: 1;
+  min-width: 0;
   
   &:focus {
     outline: none;
@@ -565,10 +614,11 @@ const BalanceDisplay = styled.div`
 `
 
 const AccountInfo = styled.div`
-  background: #141414;
-  border: 1px solid #2d2d2d;
-  border-radius: 8px;
-  padding: 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 20px;
+  padding: 1.25rem 0;
+  height: fit-content;
 `
 
 const AccountTitle = styled.h4`
@@ -626,56 +676,233 @@ interface UserData {
   email: string
   walletAddress: string
   createdAt: string
+  clientSeed?: string
+  referredBy?: string
   hasCustomAvatar?: boolean
   customAvatar?: string
+  avatarUrl?: string | null
+  level?: number
+  totalBets?: number
+  totalWon?: number
+  totalWagered?: number
+  totalWinnings?: number
+  biggestWin?: number
+  luckiestWinMultiplier?: number
+  gamesPlayed?: number
+  netProfit?: number
+  lastPlayedAt?: string
 }
 
 export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
+  // ALL HOOKS MUST BE CALLED FIRST - NO EXCEPTIONS
   const location = useLocation()
-  const navigate = useNavigate()
   const { publicKey } = useWallet()
-  const [userData, setUserData] = useState<UserData | null>(null)
+  
+  // Simple state for testing
+  const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [isInitialized, setIsInitialized] = useState(false)
   const [isEditing, setIsEditing] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<{[key: string]: string}>({})
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [showAvatarMenu, setShowAvatarMenu] = useState(false)
+  const [activeTab, setActiveTab] = useState('profile')
+  const isLoadingRef = useRef(false)
 
-  // Determine active tab based on current route
-  const getActiveTab = () => {
-    const path = location.pathname
-    if (path === '/profile') return 'profile'
-    if (path === '/bonus') return 'bonus'
-    if (path === '/statistics') return 'statistics'
-    if (path === '/transactions') return 'transactions'
-    return 'profile' // default
-  }
-
-  const activeTab = getActiveTab()
-
+  // Load profile data directly - MUST BE BEFORE ANY EARLY RETURNS
   useEffect(() => {
-    const storedUserData = localStorage.getItem('userData')
-    if (storedUserData) {
-      const parsed = JSON.parse(storedUserData)
-      setUserData(parsed)
+    const loadProfile = async () => {
+      // Prevent multiple simultaneous calls
+      if (isLoadingRef.current) return
+      
+      if (!publicKey) {
+        // No wallet connected, show fallback data
+        setProfile({
+          id: 1,
+          wallet_address: 'No wallet connected',
+          username: 'Guest User',
+          email: 'guest@example.com',
+          balance: 0,
+          level: 1,
+          total_wagered: 0,
+          total_winnings: 0,
+          net_profit: 0,
+          games_played: 0,
+          biggest_win: 0,
+          luckiest_win_multiplier: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        setLoading(false)
+        setIsInitialized(true)
+        return
+      }
+
+      isLoadingRef.current = true
+      setLoading(true)
+      try {
+        // Import the function directly
+        const { findOrCreateProfile } = await import('../utils/upsertUserProfile')
+        
+        const result = await findOrCreateProfile(publicKey.toString())
+        
+        if (result.profile) {
+          setProfile(result.profile)
+        } else {
+          // Fallback profile data for testing
+          setProfile({
+            id: 1,
+            wallet_address: publicKey.toString(),
+            username: 'TestUser',
+            email: 'test@example.com',
+            balance: 0,
+            level: 1,
+            total_wagered: 0,
+            total_winnings: 0,
+            net_profit: 0,
+            games_played: 0,
+            biggest_win: 0,
+            luckiest_win_multiplier: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+        }
+      } catch (error) {
+        // Fallback profile data for testing
+        setProfile({
+          id: 1,
+          wallet_address: publicKey.toString(),
+          username: 'TestUser',
+          email: 'test@example.com',
+          balance: 0,
+          level: 1,
+          total_wagered: 0,
+          total_winnings: 0,
+          net_profit: 0,
+          games_played: 0,
+          biggest_win: 0,
+          luckiest_win_multiplier: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+      } finally {
+        isLoadingRef.current = false
+        setLoading(false)
+        setIsInitialized(true)
+      }
+    }
+
+    // Only load once when publicKey changes
+    if (publicKey) {
+      loadProfile()
+    }
+  }, [publicKey?.toString()]) // Use toString() to prevent object reference changes
+
+  // Initialize edit values when profile loads
+  useEffect(() => {
+    if (profile) {
       setEditValues({
-        username: parsed.username || '',
-        email: parsed.email || '',
-        clientSeed: parsed.clientSeed || '',
-        referredBy: parsed.referredBy || ''
+        username: profile.username || '',
+        email: profile.email || '',
+        clientSeed: '', // Not stored in Supabase yet
+        referredBy: '' // Not stored in Supabase yet
       })
     }
-  }, [])
+  }, [profile])
+
+  // Get navigate function from useNavigate hook
+  const navigate = useNavigate()
+  
+  // Safety check for navigate function
+  const safeNavigate = (path: string) => {
+    try {
+      if (navigate && typeof navigate === 'function') {
+        navigate(path)
+      }
+    } catch (error) {
+      console.error('Navigation error:', error)
+    }
+  }
+
+  // Convert Supabase profile to userData format
+  const userData: UserData | null = profile ? {
+    username: profile.username || 'Anonymous',
+    email: profile.email || '',
+    walletAddress: profile.wallet_address,
+    clientSeed: '', // Not stored in Supabase yet
+    referredBy: profile.referred_by || '',
+    createdAt: profile.created_at,
+    hasCustomAvatar: !!profile.avatar_url,
+    avatarUrl: profile.avatar_url || null,
+    level: profile.level || 1,
+    // Statistics removed - will be added later
+    totalBets: 0,
+    totalWon: 0,
+    totalWagered: 0,
+    totalWinnings: 0,
+    biggestWin: 0,
+    luckiestWinMultiplier: 0,
+    gamesPlayed: 0,
+    netProfit: 0,
+    lastPlayedAt: undefined
+  } : null
+
+  // Update active tab based on current route
+  useEffect(() => {
+    const path = location?.pathname || '/profile'
+    if (path === '/profile') setActiveTab('profile')
+    else if (path === '/bonus') setActiveTab('bonus')
+    else if (path === '/statistics') setActiveTab('statistics')
+    else if (path === '/transactions') setActiveTab('transactions')
+    else setActiveTab('profile')
+  }, [location?.pathname])
+
+  // Early returns after all hooks
+  if (!isInitialized || loading) {
+    return <div style={{ color: 'white', padding: '20px', textAlign: 'center' }}>Loading profile...</div>
+  }
+  
+  if (!userData) {
+    return (
+      <div style={{ color: 'white', padding: '20px', textAlign: 'center' }}>
+        <h2>Profile Not Found</h2>
+        <p>Unable to load your profile. Please check the console for errors.</p>
+        <p>Make sure your wallet is connected and environment variables are set.</p>
+      </div>
+    )
+  }
 
   const handleEdit = (field: string) => {
     setIsEditing(field)
   }
 
-  const handleSave = (field: string) => {
-    if (userData) {
-      const updatedData = { ...userData, [field]: editValues[field] }
-      setUserData(updatedData)
-      localStorage.setItem('userData', JSON.stringify(updatedData))
-      setIsEditing(null)
+  const handleSave = async (field: string) => {
+    if (userData && profile) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .update({ [field]: editValues[field], updated_at: new Date().toISOString() })
+          .eq('wallet_address', profile.wallet_address)
+
+        if (error) {
+          console.error('Error updating profile:', error)
+          alert(`Error updating profile: ${error.message}`)
+          return
+        }
+
+        // Update local profile state directly
+        setProfile((prevProfile: any) => ({
+          ...prevProfile,
+          [field]: editValues[field],
+          updated_at: new Date().toISOString()
+        }))
+        setIsEditing(null)
+        
+        alert('Profile updated successfully!')
+      } catch (err) {
+        console.error('Error updating profile:', err)
+        alert('An unexpected error occurred while saving.')
+      }
     }
   }
 
@@ -685,50 +912,112 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
     setIsEditing(null)
   }
 
-  const handleAvatarUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) {
-      // Validate file type - only PNG and JPEG allowed
-      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg']
-      if (!allowedTypes.includes(file.type)) {
-        alert('Please select a PNG or JPEG image file')
+    if (!file) return
+
+    // Validate file type - only PNG and JPEG allowed
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg']
+    if (!allowedTypes.includes(file.type)) {
+      alert('Please select a PNG or JPEG image file')
+      return
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB')
+      return
+    }
+
+    if (!profile?.wallet_address) {
+      alert('Unable to upload avatar - wallet address not found')
+      return
+    }
+
+    try {
+      // Create a unique file name based on wallet address and timestamp
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${profile.wallet_address}-${Date.now()}.${fileExt}`
+      const filePath = `avatars/${fileName}`
+
+      // Upload file to Supabase storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        alert(`Upload failed: ${uploadError.message}`)
         return
       }
-      
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('File size must be less than 5MB')
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath)
+
+      // Update profile in database
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq('wallet_address', profile.wallet_address)
+
+      if (updateError) {
+        console.error('Database update error:', updateError)
+        alert(`Failed to update profile: ${updateError.message}`)
         return
       }
+
+      // Update local state
+      setProfile((prev: any) => ({
+        ...prev,
+        avatar_url: publicUrl
+      }))
+      setAvatarUrl(publicUrl)
       
-      // Create preview URL
-      const url = URL.createObjectURL(file)
-      setAvatarUrl(url)
-      
-      // Update user data with new avatar
-      if (userData) {
-        const updatedData = { ...userData, hasCustomAvatar: true, avatarUrl: url }
-        setUserData(updatedData)
-        localStorage.setItem('userData', JSON.stringify(updatedData))
-      }
-      
-      // Close menu
+      alert('Avatar updated successfully!')
       setShowAvatarMenu(false)
+    } catch (err) {
+      console.error('Error uploading avatar:', err)
+      alert('An unexpected error occurred while uploading.')
     }
   }
 
-  const handleRemoveAvatar = () => {
-    // Remove avatar and revert to default
-    setAvatarUrl(null)
-    
-    if (userData) {
-      const updatedData = { ...userData, hasCustomAvatar: false, avatarUrl: null }
-      setUserData(updatedData)
-      localStorage.setItem('userData', JSON.stringify(updatedData))
+  const handleRemoveAvatar = async () => {
+    if (!profile?.wallet_address) {
+      alert('Unable to remove avatar - wallet address not found')
+      return
     }
-    
-    // Close menu
-    setShowAvatarMenu(false)
+
+    try {
+      // Update profile in database to remove avatar
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: null, updated_at: new Date().toISOString() })
+        .eq('wallet_address', profile.wallet_address)
+
+      if (updateError) {
+        console.error('Database update error:', updateError)
+        alert(`Failed to remove avatar: ${updateError.message}`)
+        return
+      }
+
+      // Update local state
+      setProfile((prev: any) => ({
+        ...prev,
+        avatar_url: null
+      }))
+      setAvatarUrl(null)
+      
+      alert('Avatar removed successfully!')
+      setShowAvatarMenu(false)
+    } catch (err) {
+      console.error('Error removing avatar:', err)
+      alert('An unexpected error occurred while removing avatar.')
+    }
   }
 
   const getInitials = (username: string) => {
@@ -744,9 +1033,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
     return `Joined ${date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
   }
 
-  if (!userData) {
-    return <div>Loading...</div>
-  }
 
   const tabs = [
     { id: 'profile', label: 'Profile', icon: '/003-user.png' },
@@ -873,11 +1159,13 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
 
               <BalanceSection>
                 <BalanceTitle>Available Balance</BalanceTitle>
-                <BalanceDisplay>
-                  <SolanaIcon src="/solana.png" alt="Solana" />
-                  <BalanceText>0.0000</BalanceText>
-                </BalanceDisplay>
-                <ClaimButton>Claim</ClaimButton>
+                <BalanceAmount>
+                  <BalanceDisplay>
+                    <SolanaIcon src="/solana.png" alt="Solana" />
+                    <BalanceText>0.0000</BalanceText>
+                  </BalanceDisplay>
+                  <ClaimButton>Claim</ClaimButton>
+                </BalanceAmount>
                 
                 <AccountInfo>
                   <AccountTitle>Account</AccountTitle>
@@ -892,6 +1180,8 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
                   </WalletAddress>
                 </AccountInfo>
               </BalanceSection>
+
+              {/* Statistics section removed - will be added later */}
             </ContentSection>
           </>
         )
@@ -907,15 +1197,18 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
   }
 
   return (
-    <ProfilePageContainer>
-      <Sidebar>
-        {tabs.map(tab => (
+    <>
+      <ProfilePageContainer>
+        <Sidebar>
+        {tabs?.map(tab => (
           <SidebarItem
             key={tab.id}
-            active={activeTab === tab.id}
-            onClick={() => navigate(`/${tab.id}`)}
+            $active={activeTab === tab.id}
+            onClick={() => {
+              setActiveTab(tab.id)
+            }}
           >
-            {tab.icon.startsWith('/') ? (
+            {tab.icon?.startsWith('/') ? (
               <img src={tab.icon} alt={tab.label} style={{ width: '20px', height: '20px' }} />
             ) : (
               <span>{tab.icon}</span>
@@ -931,10 +1224,10 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
       
       <MainContent>
         <ProfileHeader>
-          <ProfileAvatar hasCustomAvatar={false}>
+          <ProfileAvatar $hasCustomAvatar={!!profile?.avatar_url}>
             <img 
-              src="/solly.png" 
-              alt="Default Avatar" 
+              src={profile?.avatar_url || avatarUrl || '/solly.png'} 
+              alt="Profile Avatar" 
               style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
             />
             <EditAvatarButton onClick={(e) => {
@@ -948,36 +1241,29 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
           <ProfileInfo>
             <UsernameContainer>
               <Username>{userData.username}</Username>
-              <Level>Level 1</Level>
+              <Level>Level {userData.level || 1}</Level>
             </UsernameContainer>
             <JoinDate>{formatJoinDate(userData.createdAt)}</JoinDate>
             <XPBar>
-              <XPProgress progress={28} />
+              <XPProgress $progress={28} />
             </XPBar>
             <XPText>42 / 150 XP (+108 XP for the next level)</XPText>
           </ProfileInfo>
         </ProfileHeader>
         
         {renderTabContent()}
-          </MainContent>
-          
-          {/* Avatar Upload/Remove Modal */}
-          <AvatarModalOverlay isOpen={showAvatarMenu} onClick={() => setShowAvatarMenu(false)}>
+      </MainContent>
+      
+      {/* Avatar Upload/Remove Modal */}
+          <AvatarModalOverlay $isOpen={showAvatarMenu} onClick={() => setShowAvatarMenu(false)}>
             <AvatarModal onClick={(e) => e.stopPropagation()}>
               <CloseButton onClick={() => setShowAvatarMenu(false)}>×</CloseButton>
               
               <AvatarPreview>
-                {false ? (
-                  <img 
-                    src={'/solly.png'} 
-                    alt="Current Avatar" 
-                  />
-                ) : (
-                  <img 
-                    src="/solly.png" 
-                    alt="Default Avatar" 
-                  />
-                )}
+                <img 
+                  src={profile?.avatar_url || avatarUrl || '/solly.png'} 
+                  alt="Current Avatar" 
+                />
               </AvatarPreview>
               
               <ModalTitle>Change Profile Picture</ModalTitle>
@@ -993,7 +1279,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
                   Upload Image
                 </ModalButton>
                 
-                {false && (
+                {profile?.avatar_url && (
                   <ModalButton className="remove" onClick={handleRemoveAvatar}>
                     Remove Image
                   </ModalButton>
@@ -1001,8 +1287,9 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
               </ModalButtons>
             </AvatarModal>
           </AvatarModalOverlay>
-        </ProfilePageContainer>
-      )
-    }
+      </ProfilePageContainer>
+    </>
+  )
+}
 
-    export default ProfilePage
+export default ProfilePage

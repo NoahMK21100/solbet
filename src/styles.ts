@@ -17,17 +17,18 @@ export const MainWrapper = styled.div`
   /* Mobile: No left margin since chat is hidden */
   @media (max-width: 1023px) {
     margin-left: 0;
+    width: 100vw; /* Full width when chat is hidden */
   }
   
   @media (min-width: 1024px) {
     margin-top: 90px; /* Header height */
     min-height: calc(100vh - 90px); /* Full height minus header */
     padding: 20px 1.5rem;
-    width: 1300px; /* Fixed width - wider */
-    margin-left: 350px; /* Start after chat box */
+    width: 100vw; /* Full width - will be controlled by ResponsiveMainWrapper */
+    margin-left: 0; /* No margin - will be controlled by ResponsiveMainWrapper */
     margin-right: 0; /* No right margin */
     position: relative;
-    left: calc((100vw - 350px - 1300px) / 2); /* Center within remaining space */
+    left: 0; /* No centering - fill available space */
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -35,11 +36,11 @@ export const MainWrapper = styled.div`
     margin-top: 90px; /* Header height */
     min-height: calc(100vh - 90px); /* Full height minus header */
     padding: 20px 1.5rem;
-    width: 1300px; /* Fixed width - wider */
-    margin-left: 350px; /* Start after chat box */
+    width: 100vw; /* Full width - will be controlled by ResponsiveMainWrapper */
+    margin-left: 0; /* No margin - will be controlled by ResponsiveMainWrapper */
     margin-right: 0; /* No right margin */
     position: relative;
-    left: calc((100vw - 350px - 1300px) / 2); /* Center within remaining space */
+    left: 0; /* No centering - fill available space */
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
