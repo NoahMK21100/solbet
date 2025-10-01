@@ -769,7 +769,7 @@ function Flip() {
 
       // Join the PvP game
       await joinPvpGame({
-        gameAccount: pvpGame.publicKey,
+        gameAccount: pvpGame.publicKey, // This should already be a PublicKey object
         mint: NATIVE_MINT,
         wager: wagerAmount,
         creatorAddress: PLATFORM_CREATOR_ADDRESS,
@@ -780,8 +780,21 @@ function Flip() {
       // Refresh PvP games to show updated state
       refreshPvpGames()
       
+      // Open the game modal for the joiner
+      const gameId = pvpGame.publicKey.toBase58()
+      setGameId(gameId)
+      setWager(wagerAmount)
+      setCustomBetAmount((wagerAmount / LAMPORTS_PER_SOL).toFixed(4))
+      setSide(side) // Keep the joiner's selected side
+      setCreatorSide(side === 'heads' ? 'tails' : 'heads') // Opposite of joiner's side
+      setCurrency('SOL')
+      setShowTransactionModal(true)
+      setGameState('ready-to-play')
+      setTimeout(() => setIsModalVisible(true), 10)
+      
     } catch (error) {
       console.error('Failed to join PvP game:', error)
+      alert(`Failed to join PvP game: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -1178,7 +1191,7 @@ function Flip() {
                     name: `${players[1].toBase58().slice(0, 4)}...${players[1].toBase58().slice(-4)}`,
                     level: 1,
                     avatar: `${players[1].toBase58().slice(0, 4)}...${players[1].toBase58().slice(-4)}`,
-                    side: makerSide === 'heads' ? 'tails' : 'heads',
+                    side: playerSides[players[1].toBase58()] || (makerSide === 'heads' ? 'tails' : 'heads'),
                     wager: betAmount,
                     paid: true
                   } : null,
