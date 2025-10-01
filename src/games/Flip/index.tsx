@@ -1311,7 +1311,8 @@ function Flip() {
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flex: '0 0 auto' }}>
                         {(gameEntry.status === 'waiting' || gameEntry.status === 'waiting-for-players' || gameEntry.status === 'ready-to-play') ? (
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                            {gameEntry.player1.name === publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous' ? (
+                            {(gameEntry.isPvp && gameEntry.pvpData?.gameMaker?.toBase58() === publicKey?.toBase58()) || 
+                             (!gameEntry.isPvp && gameEntry.player1.name === (publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous')) ? (
                               // If you own the game, show "Resume" button to reopen your game
                               <JoinButton 
                                 onClick={() => {
@@ -1755,7 +1756,18 @@ function Flip() {
                       <CallBotButton
                         onClick={() => {
                           if (gameState !== 'playing' && gameState !== 'completed') {
-                            callBot()
+                            const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
+                            const isCreator = currentGame?.isPvp ? 
+                              currentGame.pvpData?.gameMaker?.toBase58() === publicKey?.toBase58() :
+                              currentGame?.player1?.name === (publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous')
+                            
+                            if (currentGame?.isPvp && !isCreator && !currentGame.player2) {
+                              // This is a joiner clicking "Join Game"
+                              joinPvpGameHandler(currentGame.pvpData)
+                            } else {
+                              // This is the creator clicking "Call Bot" or other actions
+                              callBot()
+                            }
                           }
                         }}
                         disabled={gameState === 'playing' || gameState === 'completed'}
@@ -1767,12 +1779,20 @@ function Flip() {
                         {gameState === 'playing' ? 'Starting...' : 
                          (() => {
                            const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
+                           
+                           // Check if this is a PvP game and if current user is the creator
+                           const isCreator = currentGame?.isPvp ? 
+                             currentGame.pvpData?.gameMaker?.toBase58() === publicKey?.toBase58() :
+                             currentGame?.player1?.name === (publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous')
+                           
                            if (currentGame?.status === 'waiting-for-players') {
                              return 'Call Bot' // Allow player to start with bot instead of waiting
                            } else if (currentGame?.status === 'ready-to-play') {
                              // Check if both players have paid
                              const bothPlayersPaid = currentGame.player1?.paid && currentGame.player2?.paid
                              return bothPlayersPaid ? 'Start Game' : 'Waiting for Payment...'
+                           } else if (currentGame?.isPvp && !isCreator && !currentGame.player2) {
+                             return 'Join Game'
                            } else {
                              return 'Call Bot'
                            }
