@@ -287,6 +287,47 @@ function Flip() {
           // Refresh PvP games to show the new game
           refreshPvpGames()
           
+          // Open the game modal for the creator
+          setGameId(gamePda.toBase58())
+          setWager(wager)
+          setCustomBetAmount((wager / LAMPORTS_PER_SOL).toFixed(4))
+          setSide(side)
+          setCreatorSide(side)
+          setCurrency('SOL')
+          setShowTransactionModal(true)
+          setGameState('waiting-for-players')
+          
+          // Create a temporary game object for the modal
+          const tempGame = {
+            id: gamePda.toBase58(),
+            isPvp: true,
+            player1: {
+              name: `${publicKey?.toString().slice(0, 4)}...${publicKey?.toString().slice(-4)}`,
+              side: side,
+              amount: wager,
+              avatar: `${publicKey?.toString().slice(0, 4)}...${publicKey?.toString().slice(-4)}`
+            },
+            player2: null,
+            status: 'waiting-for-players',
+            currency: 'SOL',
+            pvpData: {
+              publicKey: gamePda,
+              account: {
+                gameMaker: publicKey,
+                players: [publicKey],
+                wager: wager,
+                wagerType: { sameWager: {} },
+                state: { waiting: true }
+              },
+              playerSides: {}
+            }
+          }
+          
+          // Add to userGames so modal can find it
+          setUserGames(prev => [tempGame, ...prev])
+          
+          setTimeout(() => setIsModalVisible(true), 10)
+          
         } catch (playError: any) {
           console.error('Error creating PvP game:', playError)
           alert(`Failed to create PvP game: ${playError.message || 'Unknown error'}`)
@@ -341,7 +382,7 @@ function Flip() {
   const callBot = async () => {
     try {
       // Check if this is a multiplayer game waiting for players
-      const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
+      const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId) || pvpGames.find(g => g.publicKey.toBase58() === gameId)
       const isMultiplayer = currentGame?.status === 'waiting-for-players' || currentGame?.status === 'ready-to-play'
       
       if (isMultiplayer) {
@@ -363,7 +404,7 @@ function Flip() {
       setIsSpinning(true)
       sounds.play('coin', { playbackRate: .5 })
 
-      const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
+      const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId) || pvpGames.find(g => g.publicKey.toBase58() === gameId)
       if (!currentGame) return
 
       // Both players have already paid, so we just need to determine the winner
@@ -1691,7 +1732,7 @@ function Flip() {
                         <PlayerAvatarContainer>
                           <PlayerAvatarModal $isBot={true}>
                             {(() => {
-                              const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
+                              const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId) || pvpGames.find(g => g.publicKey.toBase58() === gameId)
                               const isMultiplayer = currentGame?.status === 'waiting-for-players' || currentGame?.status === 'ready-to-play'
                               
                               if (gameState === 'waiting' || (isMultiplayer && !currentGame?.player2)) {
@@ -1741,7 +1782,7 @@ function Flip() {
                           <NameLevelContainer>
                             <PlayerNameModal>
                               {(() => {
-                                const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
+                                const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId) || pvpGames.find(g => g.publicKey.toBase58() === gameId)
                                 const isMultiplayer = currentGame?.status === 'waiting-for-players' || currentGame?.status === 'ready-to-play'
                                 
                                 if (gameState === 'waiting' || (isMultiplayer && !currentGame?.player2)) {
@@ -1769,7 +1810,7 @@ function Flip() {
                       <CallBotButton
                         onClick={() => {
                           if (gameState !== 'playing' && gameState !== 'completed') {
-                            const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
+                            const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId) || pvpGames.find(g => g.publicKey.toBase58() === gameId)
                             const isCreator = currentGame?.isPvp ? 
                               currentGame.pvpData?.gameMaker?.toBase58() === publicKey?.toBase58() :
                               currentGame?.player1?.name === (publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous')
@@ -1777,6 +1818,9 @@ function Flip() {
                             if (currentGame?.isPvp && !isCreator && !currentGame.player2) {
                               // This is a joiner clicking "Join Game"
                               joinPvpGameHandler(currentGame.pvpData)
+                            } else if (currentGame?.isPvp && currentGame.player2) {
+                              // Both players are in the game, start it
+                              callBot()
                             } else {
                               // This is the creator clicking "Call Bot" or other actions
                               callBot()
@@ -1791,7 +1835,7 @@ function Flip() {
                       >
                         {gameState === 'playing' ? 'Starting...' : 
                          (() => {
-                           const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
+                           const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId) || pvpGames.find(g => g.publicKey.toBase58() === gameId)
                            
                            // Check if this is a PvP game and if current user is the creator
                            const isCreator = currentGame?.isPvp ? 
@@ -1806,6 +1850,8 @@ function Flip() {
                              return bothPlayersPaid ? 'Start Game' : 'Waiting for Payment...'
                            } else if (currentGame?.isPvp && !isCreator && !currentGame.player2) {
                              return 'Join Game'
+                           } else if (currentGame?.isPvp && currentGame.player2) {
+                             return 'Start Game'
                            } else {
                              return 'Call Bot'
                            }
