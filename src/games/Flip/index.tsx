@@ -268,7 +268,7 @@ function Flip() {
           // Create the PvP game using correct provider
           const createIx = await createGameIx(anchorProvider as any, params)
           
-          // Join as the creator
+          // Join as the creator with the create instruction
           await joinPvpGame({
             gameAccount: gamePda,
             mint: NATIVE_MINT,
@@ -276,7 +276,7 @@ function Flip() {
             creatorAddress: PLATFORM_CREATOR_ADDRESS,
             creatorFeeBps: Math.round(MULTIPLAYER_FEE * BPS_PER_WHOLE),
             metadata: side,
-          })
+          }, [createIx])
 
           console.log('✅ PvP Game created successfully:', {
             gameId: gamePda.toBase58(),
