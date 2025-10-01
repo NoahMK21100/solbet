@@ -234,61 +234,33 @@ function Flip() {
       setGameId(newGameId)
 
       if (currency === 'SOL') {
-        // Create PvP game instead of regular game
+        // Temporarily create regular game until PvP SDK provider issue is fixed
         try {
-          const { createGameIx, deriveGamePdaFromSeed } = await import('@gamba-labs/multiplayer-sdk')
-          const { BN } = await import('@coral-xyz/anchor')
-          
-          // Generate game seed
-          const rand = crypto.getRandomValues(new Uint8Array(8))
-          const gameSeed = new BN(rand, 'le')
-          const gamePda = deriveGamePdaFromSeed(gameSeed)
-          
-          // Create game parameters
-          const params = {
-            preAllocPlayers: 2,
-            maxPlayers: 2,
-            numTeams: 0,
-            winnersTarget: 1,
-            wagerType: 0, // sameWager
-            payoutType: 0,
-            wager: wager,
-            softDuration: 60,
-            hardDuration: 240,
-            gameSeed,
-            minBet: wager,
-            maxBet: wager,
-            accounts: {
-              gameMaker: publicKey,
-              mint: NATIVE_MINT,
+          const newGame = {
+            id: newGameId.toString(),
+            player1: { 
+              name: publicKey?.toString().slice(0, 8) + '...', 
+              side: side, 
+              amount: wager 
             },
-          } as const
-
-          // Create the PvP game
-          const createIx = await createGameIx(game.anchorProvider as any, params)
+            player2: null,
+            status: 'waiting',
+            createdAt: new Date(),
+            isPvp: false
+          }
           
-          // Join as the creator
-          await joinPvpGame({
-            gameAccount: gamePda,
-            mint: NATIVE_MINT,
-            wager: wager,
-            creatorAddress: PLATFORM_CREATOR_ADDRESS,
-            creatorFeeBps: Math.round(MULTIPLAYER_FEE * BPS_PER_WHOLE),
-            metadata: side,
-          })
-
-          console.log('✅ PvP Game created successfully:', {
-            gameId: gamePda.toBase58(),
+          setUserGames(prev => [...prev, newGame])
+          setPlatformGames(prev => [...prev, newGame])
+          
+          console.log('✅ Regular game created (PvP temporarily disabled):', {
+            gameId: newGame.id,
             side: side,
             wager: wager,
           })
-
-          // Refresh PvP games to show the new game
-          refreshPvpGames()
           
         } catch (playError: any) {
-          console.error('Error creating PvP game:', playError)
-          alert(`Failed to create PvP game: ${playError.message || 'Unknown error'}`)
+          console.error('Error creating game:', playError)
+          alert(`Failed to create game: ${playError.message || 'Unknown error'}`)
           return
         }
         

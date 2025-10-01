@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { PublicKey } from '@solana/web3.js'
 import { useSpecificGames, useGambaProvider } from 'gamba-react-v2'
+import { fetchPlayerMetadata } from '@gamba-labs/multiplayer-sdk'
 import { DESIRED_MAX_PLAYERS, DESIRED_WINNERS_TARGET } from './PvpGameUtils'
 
 export interface PvpGameData {
@@ -75,5 +76,3 @@ export function usePvpGames() {
   }
 }
 
-// Import fetchPlayerMetadata at the top
-import { fetchPlayerMetadata } from '@gamba-labs/multiplayer-sdk'
