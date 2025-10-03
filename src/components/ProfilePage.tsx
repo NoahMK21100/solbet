@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useWallet } from '@solana/wallet-adapter-react'
 import styled from 'styled-components'
 import { supabase } from '../lib/supabase'
+import { LevelBadge } from './LevelBadge'
 // import { useSupabaseWalletSync } from '../hooks/useSupabaseWalletSync'
 
 // Styled components
@@ -306,17 +307,8 @@ const Username = styled.h1`
   text-shadow: 0 0 20px rgba(103, 65, 255, 0.5);
 `
 
-const Level = styled.div`
-  display: inline-block;
-  background: #42ff78;
-  color: #000;
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 700;
+const LevelWrapper = styled.div`
   margin-bottom: 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 `
 
 const JoinDate = styled.p`
@@ -1241,7 +1233,9 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onDisconnect }) => {
           <ProfileInfo>
             <UsernameContainer>
               <Username>{userData.username}</Username>
-              <Level>Level {userData.level || 1}</Level>
+              <LevelWrapper>
+                <LevelBadge level={userData.level || 1} />
+              </LevelWrapper>
             </UsernameContainer>
             <JoinDate>{formatJoinDate(userData.createdAt)}</JoinDate>
             <XPBar>

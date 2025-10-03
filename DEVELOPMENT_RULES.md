@@ -166,6 +166,14 @@ const CenteredContent = styled.div`
 - **Use shouldForwardProp**: For complex prop filtering, use `shouldForwardProp` function
 - **Consistent naming**: Use descriptive names for transient props that clearly indicate their purpose
 
+### 17. WALLET BALANCE AND MAX BUTTON IMPLEMENTATION
+- **Use useTokenBalance hook**:  always use `useTokenBalance()` from `gamba-react-ui-v2` to get actual wallet balance
+- **Import the hook**: Add `useTokenBalance` to imports from `gamba-react-ui-v2`
+- **Access balance**: Use `balance.balance` to get the wallet balance in lamports
+- **Convert to SOL**: Divide by `1_000_000_000` to convert lamports to SOL
+- **Set wager**: Use `setWager(walletBalance)` to set the bet amount
+- **Fallback handling**: Always provide fallback to `wager.max` or reasonable amount if wallet balance is 0
+
 ## Remember
 This is a professional TypeScript/React project. Every change should be:
 - **Systematic**: Based on proper CSS principles

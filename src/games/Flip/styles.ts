@@ -1,5 +1,12 @@
 import styled from 'styled-components'
 
+// Bet Input Container
+export const BetInputContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`
+
 export const GameListHeader = styled.div`
   display: flex;
   justify-content: space-between;
@@ -104,7 +111,7 @@ export const GameContainer = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2rem;
-  padding: 2rem;
+  padding: 2rem 12rem;
   background: transparent;
   color: white;
   font-family: 'Flama', sans-serif;
@@ -140,7 +147,7 @@ export const GameSubtitle = styled.p`
 
 export const GameTitle = styled.h1`
   font-family: 'Airstrike', sans-serif;
-  font-size: 3rem;
+  font-size: 2.5rem;
   font-weight: 900;
   letter-spacing: 0.1em;
   color: white;
@@ -196,13 +203,13 @@ export const RightControls = styled.div`
 export const BetAmountSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  align-items: center;
+  gap: 0.125rem;
+  align-items: flex-start;
   justify-content: flex-end;
 `
 
 export const BetLabel = styled.label`
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #ccc;
   font-weight: 600;
   font-family: 'Flama', sans-serif;
@@ -210,9 +217,17 @@ export const BetLabel = styled.label`
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  margin-bottom: 0.125rem;
+  margin-bottom: 0.25rem;
   margin-top: -0.25rem;
-  margin-left: 0.5rem;
+  margin-left: 0;
+`
+
+export const BetLabelRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
 `
 
 export const SolPriceDisplay = styled.div`
@@ -222,9 +237,7 @@ export const SolPriceDisplay = styled.div`
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  position: absolute;
-  top: -1.25rem;
-  right: 0.5rem;
+  white-space: nowrap;
 `
 
 export const SolanaIcon = styled.img`
@@ -273,26 +286,26 @@ export const BetInput = styled.input`
 export const CustomBetInputWrapper = styled.div`
   display: flex;
   align-items: center;
-  background: linear-gradient(135deg, rgba(42, 42, 42, 0.8), rgba(30, 20, 50, 0.9));
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-radius: 12px;
-  border: 0.25px solid rgba(147, 51, 234, 0.6);
-  height: 44px;
-  min-width: 200px;
+  background:rgb(12, 12, 12);
+  border-radius: 6px;
+  border: 1px solid #333;
+  height: 48px;
+  width: 100%;
+  max-width: 300px;
   position: relative;
 `
 
 export const CustomBetInput = styled.input`
   flex: 1;
-  padding: 0.5rem 0.75rem;
+  padding: 0.5rem 0.25rem;
   background: none;
   border: none;
   color: white;
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-family: 'Flama', sans-serif;
   font-weight: 600;
   outline: none;
+  min-width: 0;
   
   /* Remove number input arrows */
   -moz-appearance: textfield;
@@ -306,7 +319,7 @@ export const CustomBetInput = styled.input`
   &::placeholder {
     color: white;
     font-weight: 700;
-    font-size: 1rem;
+    font-size: 1.125rem;
   }
   
   &:focus {
@@ -318,35 +331,49 @@ export const SolanaIconWrapper = styled.div`
   display: flex;
   align-items: center;
   padding: 0 0.5rem;
-  border-right: 1px solid #3a3a3a;
 `
 
 export const MultiplierButtons = styled.div`
   display: flex;
   gap: 0.25rem;
-  padding: 0 0.5rem;
+  padding: 0 0.25rem;
+  margin-left: auto;
+  flex-shrink: 0;
 `
 
 export const MultiplierButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  height: 2rem;
+  min-height: 2rem;
+  width: auto;
+  min-width: 2rem;
+  max-width: fit-content;
+  padding: 0.25rem 0.75rem;
   background: rgb(48, 48, 48);
   border: none;
-  border-radius: 4px;
+  border-radius: 0.375rem;
   color: white;
   font-size: 0.75rem;
   font-family: 'Flama', sans-serif;
   font-weight: 600;
-  padding: 0.375rem 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
   cursor: pointer;
   box-shadow: 0 8px 5px #0000001f, inset 0 2px #ffffff12, inset 0 -2px #0000003d;
   transition: all 0.25s ease;
   transform: translateY(0);
+  flex-shrink: 0;
   
   &:hover {
     transform: translateY(-1px);
   }
   
-  &:active {
-    transform: translateY(0);
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 `
 
@@ -450,8 +477,8 @@ export const SideButton = styled.button<{ selected: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 60px;
-  height: 44px;
+  width: 70px;
+  height: 48px;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -462,7 +489,7 @@ export const SideButton = styled.button<{ selected: boolean }>`
   img {
     width: 80px;
     height: 80px;
-    margin: -10px;
+    margin: -15px;
     border-radius: 50%;
     transition: all 0.3s ease;
     transform-origin: center;
@@ -476,21 +503,21 @@ export const SideButton = styled.button<{ selected: boolean }>`
 `
 
 export const CreateGameButton = styled.button`
-  padding: 0.75rem 1.25rem;
+  padding: 0.75rem 0.875rem;
   background-color: #6741ff;
   color: white;
   border: 1px solid #1D1D1D;
-  border-radius: 10px;
+  border-radius: 8px;
   font-family: 'Flama', sans-serif;
-  font-size: 0.875rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  line-height: 1.25rem;
+  line-height: 1.1rem;
   text-shadow: rgba(0, 0, 0, 0.5) 0px 2px;
   cursor: pointer;
   user-select: none;
   position: relative;
   overflow: hidden;
-  height: 44px;
+  height: 48px;
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-backdrop-filter, backdrop-filter;
   transition-duration: 0.3s;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
@@ -583,7 +610,7 @@ export const GameEntry = styled.div<{ $isActive?: boolean; $isCompleted?: boolea
   align-items: center;
   background: ${props => 
     props.$isActive ? 'radial-gradient(circle at center, rgba(103, 65, 255, 0.3) 0%, #2a2a2a 70%)' :
-    props.$isCompleted ? 'rgba(42, 42, 42, 0.7)' : 
+    props.$isCompleted ? 'rgba(42, 42, 42, 0.85)' : 
     '#2a2a2a'
   };
   border: 1px solid ${props => 
@@ -620,11 +647,11 @@ export const GameEntry = styled.div<{ $isActive?: boolean; $isCompleted?: boolea
   
   /* Grey out completed games and their contents */
   ${props => props.$isCompleted && `
-    opacity: 0.6;
-    filter: grayscale(0.3);
+    opacity: 0.7;
+    filter: grayscale(0.2);
     
     * {
-      opacity: 0.8;
+      opacity: 0.9;
     }
   `}
 `
@@ -659,12 +686,6 @@ export const PlayerName = styled.span`
 `
 
 export const PlayerLevel = styled.span`
-  background: #6741ff;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: white;
   font-family: 'Flama', sans-serif;
 `
 
@@ -695,7 +716,7 @@ export const VsIcon = styled.img`
 
 export const BetAmountDisplay = styled.span`
   font-weight: 700;
-  color: #42ff78;
+  color: white;
   font-family: 'Flama', sans-serif;
   text-align: center;
   font-size: 1.5rem;

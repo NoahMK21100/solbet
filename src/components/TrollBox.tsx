@@ -5,6 +5,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { supabase } from '../lib/supabase'
 import { useSupabaseWalletSync } from '../hooks/useSupabaseWalletSync'
 import ProfilePopup from './ProfilePopup'
+import { LevelBadge } from './LevelBadge'
 
 // TypeScript interfaces
 interface ChatMessage {
@@ -14,6 +15,7 @@ interface ChatMessage {
   timestamp: Date
   walletAddress: string
   level: number
+  avatar_url?: string
 }
 
 interface TrollBoxProps {
@@ -244,10 +246,6 @@ const MessageItem = styled.div`
   margin-bottom: 0.5rem;
   border: 1px solid rgba(38, 46, 49, 0.8);
   height: 65px;
-  box-shadow: 
-    0 0 0 2px rgba(55, 55, 60, 0.8),
-    0 0 0 4px rgba(0, 0, 0, 0.8),
-    0 0 0 6px rgba(34, 34, 45, 0.8);
 `
 
 const MessageAvatar = styled.div`
@@ -287,26 +285,17 @@ const Username = styled.span<{ $userColor: string }>`
   color: ${({ $userColor }) => $userColor};
   font-size: 0.875rem;
   cursor: pointer;
-  text-decoration: underline;
 `
 
-const UserLevel = styled.span`
-  background-color: #333;
-  color: white;
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 600;
+const UserLevelWrapper = styled.div`
   margin-left: 0.25rem;
 `
 
 const Timestamp = styled.span`
-  font-size: 0.75rem;
+  font-size: 0.625rem;
   color: #888;
+  align-self: flex-start;
+  margin-top: 0.125rem;
 `
 
 const MessageText = styled.p`
@@ -475,7 +464,13 @@ export default function TrollBox({ isMinimized: propIsMinimized = false }: Troll
       
       const { data, error: fetchError } = await supabase
         .from('chat_messages')
-        .select('*')
+        .select(`
+          *,
+          profiles!chat_messages_wallet_address_fkey (
+            avatar_url,
+            level
+          )
+        `)
         .eq('channel', 'global')
         .order('created_at', { ascending: true })
         .limit(50)
@@ -497,7 +492,8 @@ export default function TrollBox({ isMinimized: propIsMinimized = false }: Troll
         message: msg.message || '',
         timestamp: new Date(msg.created_at),
         walletAddress: msg.wallet_address || 'unknown',
-        level: 1
+        level: msg.profiles?.level || 1,
+        avatar_url: msg.profiles?.avatar_url
       }))
       
       setMessages(formattedMessages)
@@ -619,17 +615,9 @@ export default function TrollBox({ isMinimized: propIsMinimized = false }: Troll
 
   // Format timestamp
   const formatTimestamp = (timestamp: Date): string => {
-    const now = new Date()
-    const diff = now.getTime() - timestamp.getTime()
-    const minutes = Math.floor(diff / 60000)
-    
-    if (minutes < 1) return 'now'
-    if (minutes < 60) return `${minutes}m ago`
-    
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    
-    return timestamp.toLocaleDateString()
+    const hours = timestamp.getHours().toString().padStart(2, '0')
+    const minutes = timestamp.getMinutes().toString().padStart(2, '0')
+    return `${hours}:${minutes}`
   }
 
   // Auto-scroll to bottom when new messages arrive
@@ -709,11 +697,19 @@ export default function TrollBox({ isMinimized: propIsMinimized = false }: Troll
           {messages.map((message) => (
             <MessageItem key={message.id}>
               <MessageAvatar>
-                <img 
-                  src="/solly.png" 
-                  alt="Default Avatar" 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
-                />
+                {message.avatar_url ? (
+                  <img 
+                    src={message.avatar_url} 
+                    alt="Avatar" 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+                  />
+                ) : (
+                  <img 
+                    src="/solly.png" 
+                    alt="Default Avatar" 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+                  />
+                )}
               </MessageAvatar>
               <MessageContent>
                 <MessageHeader>
@@ -724,7 +720,9 @@ export default function TrollBox({ isMinimized: propIsMinimized = false }: Troll
                     >
                       {message.username}
               </Username>
-                    <UserLevel>{message.level}</UserLevel>
+                    <UserLevelWrapper>
+                      <LevelBadge level={message.level} />
+                    </UserLevelWrapper>
                   </div>
                   <Timestamp>{formatTimestamp(message.timestamp)}</Timestamp>
                 </MessageHeader>
