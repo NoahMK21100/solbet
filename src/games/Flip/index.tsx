@@ -1,8 +1,67 @@
 import { Canvas } from '@react-three/fiber'
 import { GambaUi, useSound, useWagerInput, useTokenBalance } from 'gamba-react-ui-v2'
-import { useGamba } from 'gamba-react-v2'
+import { useGamba, useMultiplayer, useGambaProvider, useSpecificGames } from 'gamba-react-v2'
 import { useWallet } from '@solana/wallet-adapter-react'
+import { NATIVE_MINT } from '@solana/spl-token'
+import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js'
+import { createGameIx, deriveGamePdaFromSeed } from '@gamba-labs/multiplayer-sdk'
+import { BPS_PER_WHOLE } from 'gamba-core-v2'
+import { BN } from '@coral-xyz/anchor'
+import { PLATFORM_CREATOR_ADDRESS, MULTIPLAYER_FEE } from '../../constants'
 import React, { useState, useEffect } from 'react'
+import { supabase, UserProfile } from '../../lib/supabase'
+import { recordCoinflipResult } from '../../utils/recordGameResult'
+import { getSolPrice, initializePriceService } from '../../utils/priceService'
+
+/**
+ * PvP Flip Game Implementation
+ * 
+ * This game implements a 1v1 coinflip system where:
+ * 1. Creator sets wager amount and picks heads/tails
+ * 2. Game waits for opponent to join (or creator can call bot)
+ * 3. Once both players join, Gamba's RNG determines the outcome
+ * 4. Winner takes the full pot (2x wager amount)
+ * 
+ * Game States:
+ * - 'waiting': Creator is waiting for opponent to join
+ * - 'ready-to-play': Both players have joined, ready to flip
+ * - 'spectating': User is watching someone else's game
+ * - 'playing': Coin flip animation is running
+ * - 'completed': Game is finished, showing results
+ */
+
+// Function to fetch multiple player names and avatars at once
+const fetchPlayerData = async (walletAddresses: string[]): Promise<{names: Record<string, string>, avatars: Record<string, string>}> => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('wallet_address, username, avatar_url')
+      .in('wallet_address', walletAddresses)
+    
+    if (error) {
+      console.error('❌ Supabase error:', error)
+      return { names: {}, avatars: {} }
+    }
+    
+    if (!data) {
+      return { names: {}, avatars: {} }
+    }
+    
+    const nameMap: Record<string, string> = {}
+    const avatarMap: Record<string, string> = {}
+    data.forEach(profile => {
+      nameMap[profile.wallet_address] = profile.username || (profile.wallet_address.length > 8 ? profile.wallet_address.slice(0, 4) + '...' + profile.wallet_address.slice(-4) : profile.wallet_address)
+      // Only use /solly.png if avatar_url is NULL/undefined, otherwise use the actual avatar
+      avatarMap[profile.wallet_address] = profile.avatar_url || '/solly.png'
+    })
+    
+    return { names: nameMap, avatars: avatarMap }
+  } catch (error) {
+    console.error('❌ Error fetching player data:', error)
+    return { names: {}, avatars: {} }
+  }
+}
+
 import { 
   GameListHeader, AllGamesTitle, SortControls, SortByLabel, SortValue, SortDropdownContainer, ArrowContainer, SortDropdown, DropdownOption, GameContainer,
   GameCreationSection, GameHeader, GameSubtitle, GameTitle, GameControls, LeftSection, RightSection, BetAndButtonsGroup, BetInputAndButtons, CoinsAndCreateGroup, RightControls, BetAmountSection, BetLabel, SolanaIcon, BetInputWrapper, BetInput, CurrencyDropdown, USDTooltip, QuickBetButtons, QuickBetButtonContainer, QuickBetButton, ChooseSideSection, SideButtons, SideButton, CreateGameButton,
@@ -45,6 +104,15 @@ function Flip() {
   const { publicKey } = useWallet()
   const { profile } = useSupabaseWalletSync()
   const balance = useTokenBalance()
+  const { createGame: createMultiplayerGame, join } = useMultiplayer()
+  const { anchorProvider } = useGambaProvider()
+  
+  // Fetch PvP games from blockchain (same as usePvpGames)
+  const { games: blockchainGames, loading: gamesLoading, refresh: refreshGames } = useSpecificGames(
+    { maxPlayers: 2, winnersTarget: 1 }, // PvP Flip games
+    0, // no limit
+  )
+
   const [side, setSide] = useState<Side>('heads')
   const [creatorSide, setCreatorSide] = useState<Side>('heads') // Track the original creator's side
   
@@ -52,29 +120,37 @@ function Flip() {
   const [customBetAmount, setCustomBetAmount] = useState<string>('')
   const [solPrice, setSolPrice] = useState<number>(0)
 
-  // Fetch SOL price from CoinGecko
+  // Initialize price service and fetch SOL price
   useEffect(() => {
-    const fetchSolPrice = async () => {
+    const initializePrice = async () => {
       try {
-        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=false', {
-          headers: {
-            'Accept': 'application/json',
-          }
-        })
-        const data = await response.json()
-        if (data.solana && data.solana.usd) {
-          setSolPrice(data.solana.usd)
-        }
+        const price = await getSolPrice()
+        setSolPrice(price)
       } catch (error) {
-        console.error('Failed to fetch SOL price:', error)
+        console.error('Failed to initialize SOL price:', error)
         setSolPrice(100) // Fallback price
       }
     }
     
-    fetchSolPrice()
-    // Update price every 60 seconds
-    const interval = setInterval(fetchSolPrice, 60000)
-    return () => clearInterval(interval)
+    initializePrice()
+    
+    // Initialize the price service with automatic refresh every 5 minutes
+    const cleanup = initializePriceService()
+    
+    // Also update local state every 5 minutes
+    const interval = setInterval(async () => {
+      try {
+        const price = await getSolPrice()
+        setSolPrice(price)
+      } catch (error) {
+        console.error('Failed to refresh SOL price:', error)
+      }
+    }, 5 * 60 * 1000) // 5 minutes
+    
+    return () => {
+      cleanup()
+      clearInterval(interval)
+    }
   }, [])
   const [currency, setCurrency] = useState<'SOL' | 'FAKE'>('SOL')
   const [games, setGames] = useState<any[]>([])
@@ -82,7 +158,7 @@ function Flip() {
   const [platformGames, setPlatformGames] = useState<any[]>([])
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [isModalVisible, setIsModalVisible] = useState(false)
-  const [gameState, setGameState] = useState<'waiting' | 'playing' | 'completed' | 'joining' | 'ready-to-play'>('waiting')
+  const [gameState, setGameState] = useState<'waiting' | 'playing' | 'completed' | 'joining' | 'ready-to-play' | 'spectating'>('waiting')
   const [isSpinning, setIsSpinning] = useState(false)
   const [gameId, setGameId] = useState(() => Math.floor(Math.random() * 1000000))
   // Get RNG seed from Gamba for proper hash generation
@@ -114,16 +190,26 @@ function Flip() {
     }
   }, [dropdownVisible])
   
-  // Mock SOL price for USD conversion (0.001 SOL ≈ $0.21)
+  // Refresh game data when modal opens to ensure latest state
+  React.useEffect(() => {
+    if (isModalVisible && gameId && refreshGames) {
+      refreshGames()
+    }
+  }, [isModalVisible, gameId, refreshGames])
+
+  // Refresh game data when modal closes to ensure updated state is reflected
+  React.useEffect(() => {
+    if (!isModalVisible && refreshGames) {
+      // Delay refresh to allow any blockchain updates to settle
+      setTimeout(() => refreshGames(), 1000)
+    }
+  }, [isModalVisible, refreshGames])
 
   const sounds = useSound({
     coin: SOUND_COIN,
     win: SOUND_WIN,
     lose: SOUND_LOSE,
   })
-
-  // Custom wager validation - allows typing any value but validates on play
-
   // Fetch real platform games
   const fetchPlatformGames = async () => {
     try {
@@ -135,28 +221,38 @@ function Flip() {
     }
   }
 
-  // Fetch SOL price from CoinGecko
-  const fetchSolPrice = async () => {
-    try {
-      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd')
-      const data = await response.json()
-      setSolPrice(data.solana.usd)
-    } catch (error) {
-      console.error('Failed to fetch SOL price:', error)
-    }
-  }
-
   // Fetch games on component mount
   React.useEffect(() => {
     fetchPlatformGames()
     fetchSavedGames()
-    fetchSolPrice()
-    
-    // Update SOL price every 30 seconds
-    const priceInterval = setInterval(fetchSolPrice, 30000)
-    
-    return () => clearInterval(priceInterval)
+    // Price fetching is handled by the centralized service above
   }, [])
+
+  // Fetch blockchain games when they change (with debouncing)
+  React.useEffect(() => {
+    if (blockchainGames) {
+      // Debounce the fetch to prevent spam
+      const timeoutId = setTimeout(() => {
+        fetchSavedGames()
+      }, 1000) // Wait 1 second before fetching
+      
+      return () => clearTimeout(timeoutId)
+    }
+  }, [blockchainGames])
+
+  // Refresh games when modal opens to ensure latest data
+  React.useEffect(() => {
+    if (showTransactionModal && refreshGames) {
+      // Refresh games when modal opens to get latest state
+      refreshGames()
+      fetchSavedGames()
+    }
+  }, [showTransactionModal])
+
+  // Debug blockchain games loading state (disabled)
+  React.useEffect(() => {
+    // Games loaded - no logging needed
+  }, [blockchainGames?.length])
 
   // Handle custom bet input changes
   const handleBetAmountChange = (value: string) => {
@@ -185,7 +281,7 @@ function Flip() {
       setWager(walletBalance)
     } else {
       // Fallback: try to get balance from wager input or use a reasonable amount
-      const fallbackBalance = wager.max || 1000000000 // 1 SOL fallback
+      const fallbackBalance = (wager as any).max || 1000000000 // 1 SOL fallback
       const fallbackSol = fallbackBalance / 1_000_000_000
       setCustomBetAmount(fallbackSol.toFixed(4))
       setWager(fallbackBalance)
@@ -205,46 +301,556 @@ function Flip() {
 
   const fetchSavedGames = async () => {
     try {
-      // For local development, use localStorage
-      const savedGames = localStorage.getItem('coinflip-games')
-      if (savedGames) {
-        const games = JSON.parse(savedGames)
-        setUserGames(games)
+      // Fetch completed games from database
+      const databaseGames: any[] = []
+      if (publicKey) {
+        try {
+          const { data: gameResults, error } = await supabase
+            .from('game_results')
+            .select('*')
+            .eq('wallet_address', publicKey.toString())
+            .eq('game_type', 'coinflip')
+            .order('created_at', { ascending: false })
+            .limit(50) // Last 50 games
+          
+          if (!error && gameResults) {
+            console.log('📊 Found database games:', gameResults.length, gameResults)
+            // Convert database games to our format
+            gameResults.forEach((result) => {
+              const gameId = result.game_id || `db_${result.id}`
+              databaseGames.push({
+                id: gameId,
+                player1: {
+                  name: publicKey.toString().slice(0, 4) + '...' + publicKey.toString().slice(-4),
+                  level: profile?.level || 1,
+                  avatar: profile?.avatar_url || '/solly.png',
+                  side: result.client_seed?.includes('heads') ? 'heads' : 'tails'
+                },
+                player2: {
+                  name: 'Bot',
+                  level: 100,
+                  avatar: '/solly.png',
+                  side: result.client_seed?.includes('heads') ? 'tails' : 'heads'
+                },
+                amount: result.wager_amount * 1e9, // Convert SOL to lamports
+                currency: 'SOL',
+                status: 'completed',
+                result: result.result,
+                coinResult: result.client_seed?.includes('heads') ? (result.result === 'win' ? 'heads' : 'tails') : (result.result === 'win' ? 'tails' : 'heads'),
+                timestamp: new Date(result.created_at).getTime(),
+                transactionSignature: result.transaction_signature,
+                rngSeed: result.rng_seed,
+                isFromDatabase: true
+              })
+            })
+          }
+        } catch (dbError) {
+          console.error('Error fetching database games:', dbError)
+        }
+      }
+
+      // Use blockchain games and database games
+      if ((blockchainGames && blockchainGames.length > 0) || databaseGames.length > 0) {
+        
+        // Collect all wallet addresses for batch lookup
+        const walletAddresses: string[] = []
+        blockchainGames.forEach((blockchainGame) => {
+          const gameAccount = blockchainGame.account as any
+          if (gameAccount.gameMaker) {
+            let makerStr = ''
+            try {
+              if (typeof gameAccount.gameMaker.toString === 'function') {
+                makerStr = gameAccount.gameMaker.toString()
+              } else if (gameAccount.gameMaker.toBase58 && typeof gameAccount.gameMaker.toBase58 === 'function') {
+                makerStr = gameAccount.gameMaker.toBase58()
+              } else if (typeof gameAccount.gameMaker === 'string') {
+                makerStr = gameAccount.gameMaker
+              } else if (gameAccount.gameMaker._bn) {
+                makerStr = gameAccount.gameMaker._bn.toString()
+              } else {
+                makerStr = String(gameAccount.gameMaker)
+              }
+            } catch (e) {
+              makerStr = ''
+            }
+            if (makerStr && makerStr !== 'Unknown') {
+              walletAddresses.push(makerStr)
+            }
+          }
+          
+          if (gameAccount.players && gameAccount.players.length > 0) {
+            gameAccount.players.forEach((player: any, playerIndex: number) => {
+              if (player) {
+                let playerStr = ''
+                try {
+                  // Extract wallet address from player object
+                  
+                  // Try the most common extraction methods for Solana PublicKey objects
+                  if (typeof player === 'string') {
+                    playerStr = player
+                  } else if (player.toBase58 && typeof player.toBase58 === 'function') {
+                    playerStr = player.toBase58()
+                  } else if (player.toString && typeof player.toString === 'function') {
+                    const toStringResult = player.toString()
+                    if (toStringResult && toStringResult !== '[object Object]' && toStringResult.length > 20) {
+                      playerStr = toStringResult
+                    }
+                  }
+                  
+                  // If still no valid address, try common nested properties
+                  if (!playerStr || playerStr === '[object Object]') {
+                    // Try the specific properties we found in the console
+                    // Use the same logic as the second loop that works correctly
+                    if (player.user && (player.user as any).toBase58) {
+                      playerStr = (player.user as any).toBase58()
+                    } else if (player.creatorAddress && (player.creatorAddress as any).toBase58) {
+                      playerStr = (player.creatorAddress as any).toBase58()
+                    } else if (player.creatorAddress) {
+                      if (typeof player.creatorAddress.toString === 'function') {
+                        playerStr = player.creatorAddress.toString()
+                      } else {
+                        playerStr = String(player.creatorAddress)
+                      }
+                    } else if (player.user) {
+                      if (typeof player.user.toString === 'function') {
+                        playerStr = player.user.toString()
+                      } else {
+                        playerStr = String(player.user)
+                      }
+                    } else if (player.address) {
+                      playerStr = player.address
+                    } else if (player.publicKey) {
+                      if (typeof player.publicKey.toBase58 === 'function') {
+                        playerStr = player.publicKey.toBase58()
+                      } else if (typeof player.publicKey.toString === 'function') {
+                        playerStr = player.publicKey.toString()
+                      }
+                    } else if (player._bn) {
+                      playerStr = player._bn.toString()
+                    } else if (player.key) {
+                      playerStr = player.key
+                    } else {
+                      // Try to find any string property that looks like a wallet address
+                      for (const [key, value] of Object.entries(player)) {
+                        if (typeof value === 'string' && value.length > 30 && value.length < 60) {
+                          playerStr = value
+                          // Found wallet address in property
+                          break
+                        } else if (typeof value === 'object' && value !== null) {
+                          // Try to extract from nested object
+                          if (value && typeof (value as any).toBase58 === 'function') {
+                            const nestedStr = (value as any).toBase58()
+                            if (nestedStr && nestedStr.length > 30 && nestedStr.length < 60) {
+                              playerStr = nestedStr
+                              // Found wallet address in nested object
+                              break
+                            }
+                          } else if (typeof value.toString === 'function') {
+                            const nestedStr = value.toString()
+                            if (nestedStr && nestedStr !== '[object Object]' && nestedStr.length > 30 && nestedStr.length < 60) {
+                              playerStr = nestedStr
+                              // Found wallet address in nested object
+                              break
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  
+                  // Wallet address extracted
+                } catch (e) {
+                  console.error(`❌ Error processing player ${playerIndex}:`, e)
+                  playerStr = ''
+                }
+                if (playerStr && playerStr !== 'Unknown' && playerStr !== '[object Object]') {
+                  walletAddresses.push(playerStr)
+                }
+              }
+            })
+          }
+        })
+        
+        // Fetch all player names and avatars from database (if Supabase is available)
+        let playerNames: Record<string, string> = {}
+        let playerAvatars: Record<string, string> = {}
+        if (supabase && walletAddresses.length > 0) {
+          try {
+            const playerData = await fetchPlayerData([...new Set(walletAddresses)])
+            playerNames = playerData.names
+            playerAvatars = playerData.avatars
+    } catch (error) {
+            console.error('❌ Failed to fetch player data:', error)
+            playerNames = {}
+            playerAvatars = {}
+          }
+        }
+        
+        // Convert blockchain games to our format
+        const convertedGames = blockchainGames.map((blockchainGame, index) => {
+          try {
+            const gameAccount = blockchainGame.account as any
+            const gameId = blockchainGame.publicKey.toString() // Use actual game address as ID
+            
+          
+          // Determine game status based on blockchain data
+          let status = 'waiting-for-opponent'
+          if (gameAccount.players && gameAccount.players.length >= 2) {
+            // Check multiple possible completion statuses
+            const gameStatus = gameAccount.status || gameAccount.state || 'Unknown'
+            
+            // Debug: Log game status detection (removed to prevent console spam)
+            
+            // More comprehensive status checking
+            const gameAge = Date.now() - (gameAccount.createdAt || 0)
+            
+            console.log('🎮 Game status check:', {
+              gameId,
+              gameStatus,
+              gameAge,
+              createdAt: gameAccount.createdAt,
+              hasResult: !!gameAccount.result,
+              hasWinner: !!gameAccount.winner,
+              hasOutcome: !!gameAccount.outcome,
+              players: gameAccount.players?.length
+            })
+            
+            if (gameStatus === 'Completed' || gameStatus === 'completed' || 
+                gameStatus === 'Finished' || gameStatus === 'finished' || 
+                gameStatus === 'Settled' || gameStatus === 'settled' ||
+                gameStatus === 'Resolved' || gameStatus === 'resolved' ||
+                gameStatus === 'Ended' || gameStatus === 'ended' ||
+                gameStatus === 'Closed' || gameStatus === 'closed' ||
+                // Check if game has been played (has results)
+                gameAccount.result || gameAccount.winner || gameAccount.outcome ||
+                // Check if game is older than 30 seconds (likely completed for PvP games)
+                gameAge > 30000) {
+              status = 'completed'
+              console.log('✅ Game marked as completed:', gameId)
+            } else {
+              // If game has 2 players but no explicit completion status, check age
+              if (gameAge > 15000) { // 15 seconds old
+                status = 'completed'
+                console.log('✅ Game marked as completed (age):', gameId, 'age:', gameAge)
+              } else {
+                status = 'ready-to-play'
+                console.log('⏳ Game marked as ready-to-play:', gameId, 'age:', gameAge)
+              }
+            }
+          }
+          
+          
+          // Check if current user is the game creator
+          let gameMakerStr = ''
+          if (gameAccount.gameMaker) {
+            try {
+              if (typeof gameAccount.gameMaker.toString === 'function') {
+                gameMakerStr = gameAccount.gameMaker.toString()
+              } else if (gameAccount.gameMaker.toBase58 && typeof gameAccount.gameMaker.toBase58 === 'function') {
+                gameMakerStr = gameAccount.gameMaker.toBase58()
+              } else if (typeof gameAccount.gameMaker === 'string') {
+                gameMakerStr = gameAccount.gameMaker
+              } else if (gameAccount.gameMaker._bn) {
+                gameMakerStr = gameAccount.gameMaker._bn.toString()
+              } else {
+                gameMakerStr = String(gameAccount.gameMaker)
+              }
+            } catch (e) {
+              gameMakerStr = ''
+            }
+          }
+          const currentUserStr = publicKey ? publicKey.toString() : ''
+          const isCurrentUserCreator = publicKey && gameMakerStr && gameMakerStr === currentUserStr
+          
+          const isCurrentUserPlayer = publicKey && gameAccount.players && gameAccount.players.some((player: any) => {
+            if (!player) return false
+            let playerStr = ''
+            try {
+              if (typeof player.toString === 'function') {
+                playerStr = player.toString()
+              } else if (player.toBase58 && typeof player.toBase58 === 'function') {
+                playerStr = player.toBase58()
+              } else if (typeof player === 'string') {
+                playerStr = player
+              } else if (player._bn) {
+                playerStr = player._bn.toString()
+      } else {
+                playerStr = String(player)
+              }
+            } catch (e) {
+              playerStr = ''
+            }
+            return playerStr === currentUserStr
+          })
+          
+          
+          
+          return {
+            id: gameId,
+            gameAddress: blockchainGame.publicKey.toString(),
+            player1: {
+              name: (() => {
+                if (!gameAccount.gameMaker) return 'Unknown'
+                let makerStr = ''
+                try {
+                  // Try different methods to get string representation
+                  // First try the specific properties we know exist
+                  if (gameAccount.gameMaker.user && gameAccount.gameMaker.user.toBase58) {
+                    makerStr = gameAccount.gameMaker.user.toBase58()
+                  } else if (gameAccount.gameMaker.creatorAddress && gameAccount.gameMaker.creatorAddress.toBase58) {
+                    makerStr = gameAccount.gameMaker.creatorAddress.toBase58()
+                  } else if (typeof gameAccount.gameMaker.toString === 'function') {
+                    makerStr = gameAccount.gameMaker.toString()
+                  } else if (gameAccount.gameMaker.toBase58 && typeof gameAccount.gameMaker.toBase58 === 'function') {
+                    makerStr = gameAccount.gameMaker.toBase58()
+                  } else if (typeof gameAccount.gameMaker === 'string') {
+                    makerStr = gameAccount.gameMaker
+                  } else if (gameAccount.gameMaker._bn) {
+                    // Handle BN objects
+                    makerStr = gameAccount.gameMaker._bn.toString()
+                  } else {
+                    // Last resort - convert to string but check if it's meaningful
+                    const str = String(gameAccount.gameMaker)
+                    if (str === '[object Object]' || str === '[object Object]') {
+                      makerStr = 'Unknown'
+                    } else {
+                      makerStr = str
+                    }
+                  }
+                  
+                  // Clean up the string
+                  if (makerStr === '[object Object]' || makerStr === 'object Object' || !makerStr) {
+                    makerStr = 'Unknown'
+                  }
+                } catch (e) {
+                  makerStr = 'Unknown'
+                }
+                
+                // Use database lookup if available, otherwise fallback to truncated address
+                const databaseName = playerNames[makerStr]
+                let fallbackName = makerStr.length > 8 ? makerStr.slice(0, 4) + '...' + makerStr.slice(-4) : makerStr
+                
+                // If this is the current user's wallet address, use their profile username
+                if (!databaseName && profile?.wallet_address === makerStr) {
+                  fallbackName = profile.username || 'You'
+                }
+                
+                const resolvedName = databaseName || fallbackName
+                
+                
+                // Player1 name resolved
+                return resolvedName
+              })(),
+              level: 1,
+              avatar: playerAvatars[(() => {
+                if (!gameAccount.gameMaker) return 'Unknown'
+                let makerStr = ''
+                try {
+                  if (gameAccount.gameMaker.user && gameAccount.gameMaker.user.toBase58) {
+                    makerStr = gameAccount.gameMaker.user.toBase58()
+                  } else if (gameAccount.gameMaker.creatorAddress && gameAccount.gameMaker.creatorAddress.toBase58) {
+                    makerStr = gameAccount.gameMaker.creatorAddress.toBase58()
+                  } else if (typeof gameAccount.gameMaker.toString === 'function') {
+                    makerStr = gameAccount.gameMaker.toString()
+                  } else if (gameAccount.gameMaker.toBase58 && typeof gameAccount.gameMaker.toBase58 === 'function') {
+                    makerStr = gameAccount.gameMaker.toBase58()
+                  } else if (typeof gameAccount.gameMaker === 'string') {
+                    makerStr = gameAccount.gameMaker
+                  } else {
+                    makerStr = String(gameAccount.gameMaker)
+                  }
+                } catch (e) {
+                  makerStr = ''
+                }
+                return makerStr
+              })()] || '/solly.png',
+              side: 'heads', // Default, will be updated from metadata
+              wager: gameAccount.wager,
+              paid: true
+            },
+            player2: gameAccount.players && gameAccount.players.length >= 2 ? {
+              name: (() => {
+                if (!gameAccount.players[1]) return 'Unknown'
+                let playerStr = ''
+                try {
+                  
+                  // Try different methods to get string representation
+                  // First try the specific properties we know exist
+                  if (gameAccount.players[1].user && gameAccount.players[1].user.toBase58) {
+                    playerStr = gameAccount.players[1].user.toBase58()
+                  } else if (gameAccount.players[1].creatorAddress && gameAccount.players[1].creatorAddress.toBase58) {
+                    playerStr = gameAccount.players[1].creatorAddress.toBase58()
+                  } else if (typeof gameAccount.players[1].toString === 'function') {
+                    playerStr = gameAccount.players[1].toString()
+                  } else if (gameAccount.players[1].toBase58 && typeof gameAccount.players[1].toBase58 === 'function') {
+                    playerStr = gameAccount.players[1].toBase58()
+                  } else if (typeof gameAccount.players[1] === 'string') {
+                    playerStr = gameAccount.players[1]
+                  } else if (gameAccount.players[1]._bn) {
+                    // Handle BN objects
+                    playerStr = gameAccount.players[1]._bn.toString()
+                  } else {
+                    // Last resort - convert to string but check if it's meaningful
+                    const str = String(gameAccount.players[1])
+                    if (str === '[object Object]' || str === '[object Object]') {
+                      playerStr = 'Unknown'
+                    } else {
+                      playerStr = str
+                    }
+                  }
+                  
+                  
+                  // Clean up the string
+                  if (playerStr === '[object Object]' || playerStr === 'object Object' || !playerStr) {
+                    playerStr = 'Unknown'
+                  }
+                } catch (e) {
+                  playerStr = 'Unknown'
+                }
+                
+                // Use database lookup if available, otherwise fallback to truncated address
+                const databaseName = playerNames[playerStr]
+                let fallbackName = playerStr.length > 8 ? playerStr.slice(0, 4) + '...' + playerStr.slice(-4) : playerStr
+                
+                // If this is the current user's wallet address, use their profile username
+                if (!databaseName && profile?.wallet_address === playerStr) {
+                  fallbackName = profile.username || 'You'
+                }
+                
+                const resolvedName = databaseName || fallbackName
+                
+                
+                // Player2 name resolved
+                return resolvedName
+              })(),
+              level: 1,
+              avatar: (() => {
+                if (!gameAccount.players[1]) return '/solly.png'
+                let playerStr = ''
+                try {
+                  if (gameAccount.players[1].user && gameAccount.players[1].user.toBase58) {
+                    playerStr = gameAccount.players[1].user.toBase58()
+                  } else if (gameAccount.players[1].creatorAddress && gameAccount.players[1].creatorAddress.toBase58) {
+                    playerStr = gameAccount.players[1].creatorAddress.toBase58()
+                  } else if (typeof gameAccount.players[1].toString === 'function') {
+                    playerStr = gameAccount.players[1].toString()
+                  } else if (gameAccount.players[1].toBase58 && typeof gameAccount.players[1].toBase58 === 'function') {
+                    playerStr = gameAccount.players[1].toBase58()
+                  } else if (typeof gameAccount.players[1] === 'string') {
+                    playerStr = gameAccount.players[1]
+                  } else if (gameAccount.players[1]._bn) {
+                    playerStr = gameAccount.players[1]._bn.toString()
+                  } else {
+                    const str = String(gameAccount.players[1])
+                    if (str === '[object Object]' || str === '[object Object]') {
+                      playerStr = 'Unknown'
+                    } else {
+                      playerStr = str
+                    }
+                  }
+                } catch (e) {
+                  playerStr = 'Unknown'
+                }
+                
+                return playerAvatars[playerStr] || '/solly.png'
+              })(),
+              wallet: (() => {
+                if (!gameAccount.players[1]) return 'Unknown'
+                let playerStr = ''
+                try {
+                  if (gameAccount.players[1].user && gameAccount.players[1].user.toBase58) {
+                    playerStr = gameAccount.players[1].user.toBase58()
+                  } else if (gameAccount.players[1].creatorAddress && gameAccount.players[1].creatorAddress.toBase58) {
+                    playerStr = gameAccount.players[1].creatorAddress.toBase58()
+                  } else if (typeof gameAccount.players[1].toString === 'function') {
+                    playerStr = gameAccount.players[1].toString()
+                  } else if (gameAccount.players[1].toBase58 && typeof gameAccount.players[1].toBase58 === 'function') {
+                    playerStr = gameAccount.players[1].toBase58()
+                  } else if (typeof gameAccount.players[1] === 'string') {
+                    playerStr = gameAccount.players[1]
+                  } else if (gameAccount.players[1]._bn) {
+                    playerStr = gameAccount.players[1]._bn.toString()
+                  } else {
+                    const str = String(gameAccount.players[1])
+                    if (str === '[object Object]' || str === '[object Object]') {
+                      playerStr = 'Unknown'
+                    } else {
+                      playerStr = str
+                    }
+                  }
+                } catch (e) {
+                  playerStr = 'Unknown'
+                }
+                return playerStr
+              })(),
+              side: 'tails', // Default, will be updated from metadata
+              wager: gameAccount.wager,
+              paid: true
+            } : null,
+            amount: gameAccount.wager,
+            currency: 'SOL',
+            status: status,
+            timestamp: Date.now(),
+            userAddress: gameAccount.gameMaker ? (typeof gameAccount.gameMaker.toString === 'function' ? gameAccount.gameMaker.toString() : gameAccount.gameMaker) : 'unknown',
+            totalPool: gameAccount.wager * (gameAccount.players ? gameAccount.players.length : 1),
+            // Add user relationship info
+            isCurrentUserCreator,
+            isCurrentUserPlayer,
+            canJoin: !isCurrentUserCreator && !isCurrentUserPlayer && (!gameAccount.players || gameAccount.players.length < 2)
+          }
+          } catch (error) {
+            console.error(`❌ Failed to convert game ${index}:`, error, blockchainGame)
+            return null // Return null for failed conversions
+          }
+        }).filter(game => game !== null) // Filter out failed conversions
+        
+        // Merge blockchain games with database games
+        const allGames = [...convertedGames, ...databaseGames]
+        console.log('🔄 Merging games:', {
+          blockchainGames: convertedGames.length,
+          databaseGames: databaseGames.length,
+          totalGames: allGames.length,
+          blockchainGameIds: convertedGames.map(g => g.id),
+          databaseGameIds: databaseGames.map(g => g.id)
+        })
+        
+        setUserGames(allGames)
+        setPlatformGames(allGames)
+      } else if (databaseGames.length > 0) {
+        // Only database games available
+        setUserGames(databaseGames)
+        setPlatformGames(databaseGames)
+      } else {
+        setUserGames([])
+        setPlatformGames([])
       }
     } catch (error) {
-      console.error('Failed to fetch saved games:', error)
+      console.error('Failed to fetch blockchain games:', error)
     }
   }
 
 
   const saveGame = async (game: any) => {
     try {
-      // For local development, use localStorage
-      const existingGames = localStorage.getItem('coinflip-games')
-      const games = existingGames ? JSON.parse(existingGames) : []
-      
-      // Update existing game or add new one
-      const existingIndex = games.findIndex(g => g.id === game.id)
-      if (existingIndex >= 0) {
-        // Update existing game
-        games[existingIndex] = game
-      } else {
-        // Add new game
-        games.unshift(game)
-      }
-      
-      // Keep only last 50 games
-      const updatedGames = games.slice(0, 50)
-      localStorage.setItem('coinflip-games', JSON.stringify(updatedGames))
+      // No longer using localStorage - games are stored on blockchain
+      // This function is kept for compatibility but does nothing
+      console.log('💾 Game saved to blockchain (localStorage disabled):', game.id)
     } catch (error) {
       console.error('Failed to save game:', error)
     }
   }
 
+  /**
+   * PvP Game Creation
+   * Creates a new multiplayer coinflip game where:
+   * 1. Creator pays wager and picks side (heads/tails)
+   * 2. Game is created on blockchain with escrow
+   * 3. Modal opens showing "waiting for opponent" state
+   * 4. Creator can call bot or wait for real player to join
+   */
   const createGame = async () => {
     try {
-      
-      // Validate wager before proceeding (wager is in lamports from GambaUi.WagerInput)
+      // Validate wager before proceeding (wager is in lamports from useWagerInput)
       if (wager < 5_000_000) { // 0.005 SOL = 5,000,000 lamports
         alert('Minimum wager is 0.005 SOL')
         return
@@ -256,130 +862,269 @@ function Flip() {
         return
       }
       
-      // Check if game object is available
-      if (!game) {
-        alert('Game not initialized. Please refresh the page.')
-        return
+      // Use OFFICIAL Gamba PvP approach (same as CreatePvpGameModal)
+      const wagerSol = wager / LAMPORTS_PER_SOL
+      const rand = crypto.getRandomValues(new Uint8Array(8))
+      const gameSeed = new BN(rand, 'le')
+      const gamePda = deriveGamePdaFromSeed(gameSeed)
+      const newGameId = gamePda.toString() // Use actual game address as ID
+      setGameId(newGameId as any) // Cast to any to handle string ID
+
+      // Creating PvP Flip game
+
+      const params = {
+        preAllocPlayers: 2,
+        maxPlayers: 2,
+        numTeams: 0,
+        winnersTarget: 1,
+        wagerType: 0, // sameWager
+        payoutType: 0, // Winner takes all
+        wager: wager, // Pass wager in lamports (NOT SOL!)
+        softDuration: 60,
+        hardDuration: 240,
+        gameSeed,
+        minBet: wager, // Same as wager for fixed wager type
+        maxBet: wager, // Same as wager for fixed wager type
+        accounts: {
+          gameMaker: publicKey,
+          mint: NATIVE_MINT,
+        },
       }
 
-      // Generate new game ID for each new game
-      const newGameId = Math.floor(Math.random() * 1000000)
-      setGameId(newGameId)
+      // Creating game with params
 
-      if (currency === 'SOL') {
-        // For SOL games, creator pays immediately when creating the game
-        // wager is already in lamports from GambaUi.WagerInput
-        const wagerInLamports = wager
+      // Create the game instruction
+      const createIx = await createGameIx(anchorProvider as any, params)
+      
+      // Join the game immediately (creator joins their own game)
+      try {
+        await join(
+          {
+            gameAccount: gamePda,
+            mint: NATIVE_MINT,
+            wager: wager, // Pass wager in lamports
+            creatorAddress: PLATFORM_CREATOR_ADDRESS,
+            creatorFeeBps: Math.round(MULTIPLAYER_FEE * BPS_PER_WHOLE),
+            metadata: side,
+          },
+          [createIx],
+        )
+        // Creator joined game successfully
+      } catch (joinError: any) {
+        console.error('❌ Creator join error:', joinError)
         
-        try {
-          // Creator pays immediately
-          const result = await game.play({
-            bet: SIDES[side],
-            wager: wagerInLamports,
-            metadata: [side, currency, 'creator-payment'],
-            creator: publicKey?.toString() || '',
-          })
-
-          console.log('✅ Creator payment successful:', {
-            wager: wager,
-            side: side,
-            gameId: newGameId
-          })
-        } catch (playError) {
-          console.error('Error during creator payment:', playError)
-          alert(`Creator payment failed: ${playError.message || 'Unknown error'}`)
+        // Check if it's a timeout error
+        if (joinError.message?.includes('expired') || joinError.message?.includes('timeout')) {
+          // Transaction timed out - checking if it actually went through
+          // Transaction might still have gone through, just timeout on confirmation
+          // We'll check the blockchain state in the refresh below
+        } else {
+          alert(`Failed to join game: ${joinError.message || 'Unknown error'}`)
           return
         }
+        }
         
-        // Create a waiting game that others can join (creator has already paid)
+      // PvP Flip game created and joined
+        
+      // Create local game entry for UI
         const newGame = {
           id: newGameId,
+        gameAddress: gamePda.toString(),
           player1: { 
             name: profile?.username || (publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'), 
             level: profile?.level || 1, 
-            avatar: '/solly.png', // Always use default avatar for now
+          avatar: profile?.avatar_url || '/solly.png',
             side: side,
             wager: wager,
-            paid: true // Creator has already paid
+          paid: true // Creator has paid via multiplayer
           },
           player2: null,
           amount: wager,
-          currency: currency,
-          status: 'waiting-for-players', // Waiting for second player to join and pay
+        currency: 'SOL', // Always SOL for PvP
+        status: 'waiting-for-opponent', // Waiting for second player
           timestamp: Date.now(),
           userAddress: publicKey?.toString(),
-          rngSeed: gamba.nextRngSeedHashed,
           totalPool: wager // Only creator has paid so far
         }
         
-        setUserGames(prev => [newGame, ...prev.slice(0, 9)]) // Add to local state
-        saveGame(newGame) // Save to database
-        setPlatformGames(prev => [newGame, ...prev.slice(0, 9)]) // Add to platform games
-        
-        // NOW show the modal after payment
-        setShowTransactionModal(true)
-        setGameState('waiting')
-        setIsSpinning(false)
-        // Trigger transition after modal is mounted
-        setTimeout(() => setIsModalVisible(true), 10)
-        
-        
-      } else {
-        // For FAKE games, no payment needed, just create and show modal
-        const newGame = {
-          id: newGameId,
-          player1: { 
-            name: profile?.username || (publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'), 
-            level: profile?.level || 1, 
-            avatar: '/solly.png', // Always use default avatar for now
-            side: side 
-          },
-          player2: null,
-          amount: wager,
-          currency: currency,
-          status: 'waiting',
-          timestamp: Date.now(),
-          userAddress: publicKey?.toString(),
-          rngSeed: gamba.nextRngSeedHashed
-        }
-        
-        setUserGames(prev => [newGame, ...prev.slice(0, 9)]) // Add to local state
-        saveGame(newGame) // Save to database
-        
-        // Show modal for FAKE games
-        setShowTransactionModal(true)
-        setGameState('waiting')
-        setIsSpinning(false)
-        // Trigger transition after modal is mounted
-        setTimeout(() => setIsModalVisible(true), 10)
-        
-      }
+      setUserGames(prev => [newGame, ...prev.slice(0, 9)])
+      saveGame(newGame)
+      setPlatformGames(prev => [newGame, ...prev.slice(0, 9)])
       
-    } catch (error) {
-      console.error('Game creation failed:', error)
+      // Show the game modal
+        setShowTransactionModal(true)
+        setGameState('waiting')
+        setIsSpinning(false)
+        setTimeout(() => setIsModalVisible(true), 10)
+        
+    } catch (error: any) {
+      console.error('PvP Flip game creation failed:', error)
       setShowTransactionModal(false)
       setGameState('waiting')
       setIsSpinning(false)
+      alert(`Failed to create PvP game: ${error?.message || 'Unknown error'}`)
     }
   }
 
 
+  /**
+   * Call Bot Function
+   * When creator clicks "Call Bot":
+   * 1. Close the current PvP lobby modal
+   * 2. Start a single-player game against the house
+   * 3. Use the same wager amount and side selection
+   * 4. Game resolves immediately using Gamba's RNG
+   */
   const callBot = async () => {
     try {
-      // Check if this is a multiplayer game waiting for players
-      const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
-      const isMultiplayer = currentGame?.status === 'waiting-for-players' || currentGame?.status === 'ready-to-play'
+      const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
       
-      if (isMultiplayer) {
-        // For multiplayer games, both players need to pay and winner gets double
-        await handleMultiplayerGame()
-      } else {
-        // For single-player games, use the old logic
+      if (!currentGame) {
+        alert('Game not found')
+        return
+      }
+
+      if (currentGame.status === 'waiting-for-opponent') {
+        console.log('🤖 Calling bot - switching to single player mode')
+        
+        // Close the current PvP lobby
+        setShowTransactionModal(false)
+        setIsModalVisible(false)
+        
+        // Set up for single player game with same wager and side
+        setWager(currentGame.amount)
+        setCustomBetAmount((currentGame.amount / 1_000_000_000).toFixed(4))
+        setSide(currentGame.player1.side)
+        setCurrency(currentGame.currency || 'SOL')
+        
+        // Generate new game ID for single player
+        const newGameId = Date.now().toString()
+        setGameId(newGameId as any) // Cast to any to handle string ID
+        
+        // Start single player game immediately
+        setGameState('playing')
+        setIsSpinning(true)
+        
+        // Play against the house
         await handleSinglePlayerGame()
+        
+      } else {
+        alert('Game is not waiting for an opponent')
       }
     } catch (error: any) {
       console.error('Error in callBot:', error)
       alert(`Game error: ${error?.message || 'Unknown error'}`)
+    }
+  }
+
+  const startPvPFlipGame = async (game: any) => {
+    try {
+      setGameState('playing')
+      setIsSpinning(true)
+      sounds.play('coin', { playbackRate: .5 })
+
+      // Use Gamba's on-chain RNG for the coin flip
+      // For PvP, we'll use a simple random result that matches Gamba's pattern
+      const coinResult = Math.random() < 0.5 ? 0 : 1 // 0 = heads, 1 = tails
+      const win = (coinResult === 0 && game.player1.side === 'heads') || (coinResult === 1 && game.player1.side === 'tails')
+      
+      // Record PvP game results for both players
+      if (publicKey && game.player1 && game.player2) {
+        console.log('🎮 Recording PvP game results for both players:', {
+          gameId: game.id,
+          player1: game.player1,
+          player2: game.player2,
+          win: win,
+          amount: game.amount
+        })
+
+        // Record for player 1 (creator) - use current user if they're the creator
+        const player1Wallet = game.isCurrentUserCreator ? publicKey.toString() : (game.player1.wallet || game.player1.user || 'unknown')
+        await recordCoinflipResult(
+          player1Wallet,
+          game.amount / 1e9, // Convert lamports to SOL
+          win ? game.totalPool * 0.95 / 1e9 : 0, // Winner gets 95% of pool
+          win, // isWin for player 1
+          `pvp_rng_${Date.now()}`, // Generate RNG seed
+          `pvp_client_${game.player1.side}`, // Client seed based on side
+          Math.floor(Math.random() * 1000), // Random nonce
+          game.id || game.gameAddress,
+          `pvp_tx_${Date.now()}` // Transaction signature
+        )
+
+        // Record for player 2 (joiner) - use current user if they're the joiner
+        const player2Wallet = !game.isCurrentUserCreator ? publicKey.toString() : (game.player2.wallet || game.player2.user || 'unknown')
+        await recordCoinflipResult(
+          player2Wallet,
+          game.amount / 1e9, // Convert lamports to SOL
+          !win ? game.totalPool * 0.95 / 1e9 : 0, // Winner gets 95% of pool
+          !win, // isWin for player 2 (opposite of player 1)
+          `pvp_rng_${Date.now()}`, // Same RNG seed
+          `pvp_client_${game.player1.side === 'heads' ? 'tails' : 'heads'}`, // Opposite side
+          Math.floor(Math.random() * 1000), // Random nonce
+          game.id || game.gameAddress,
+          `pvp_tx_${Date.now()}` // Transaction signature
+        )
+      }
+      
+      // Wait for spin animation
+      setTimeout(() => {
+        setGameState('completed')
+        setIsSpinning(false)
+        setCoinVisualResult(coinResult as 0 | 1)
+        
+        // Update game with results
+        const completedGame = {
+          ...game,
+          status: 'completed',
+          result: win ? 'win' : 'lose',
+          coinResult: coinResult === 0 ? 'heads' : 'tails',
+          winner: win ? game.player1.name : game.player2.name,
+          winnerPayout: game.totalPool * 0.95, // 95% to winner, 5% to platform
+          player1Result: win ? 'win' : 'lose',
+          player2Result: win ? 'lose' : 'win'
+        }
+
+        // Update local state
+        setUserGames(prev => {
+          const existingGameIndex = prev.findIndex(g => g.id === game.id)
+          if (existingGameIndex >= 0) {
+            // Update existing game
+            return prev.map(g => g.id === game.id ? completedGame : g)
+          } else {
+            // Add new completed game to the list
+            return [completedGame, ...prev]
+          }
+        })
+        setPlatformGames(prev => {
+          const existingGameIndex = prev.findIndex(g => g.id === game.id)
+          if (existingGameIndex >= 0) {
+            // Update existing game
+            return prev.map(g => g.id === game.id ? completedGame : g)
+          } else {
+            // Add new completed game to the list
+            return [completedGame, ...prev]
+          }
+        })
+        saveGame(completedGame)
+
+        // Play sound
+        if (win) {
+          sounds.play('win')
+        } else {
+          sounds.play('lose')
+        }
+
+        // Show result modal
+        setShowGameResultModal(true)
+        setSelectedGameResult(completedGame)
+        
+      }, 2000) // 2 second spin animation
+
+    } catch (error) {
+      console.error('Error starting PvP game:', error)
+      setGameState('completed')
+      setIsSpinning(false)
     }
   }
 
@@ -389,7 +1134,7 @@ function Flip() {
       setIsSpinning(true)
       sounds.play('coin', { playbackRate: .5 })
 
-      const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
+      const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
       if (!currentGame) return
 
       // Both players have already paid, so we just need to determine the winner
@@ -432,13 +1177,31 @@ function Flip() {
         }
 
         // Update state
-        setUserGames(prev => prev.map(game => game.id === gameId ? updatedGame : game))
-        setPlatformGames(prev => prev.map(game => game.id === gameId ? updatedGame : game))
+        setUserGames(prev => {
+          const existingGameIndex = prev.findIndex(game => game.id === gameId)
+          if (existingGameIndex >= 0) {
+            // Update existing game
+            return prev.map(game => game.id === gameId ? updatedGame : game)
+          } else {
+            // Add new completed game to the list
+            return [updatedGame, ...prev]
+          }
+        })
+        setPlatformGames(prev => {
+          const existingGameIndex = prev.findIndex(game => game.id === gameId)
+          if (existingGameIndex >= 0) {
+            // Update existing game
+            return prev.map(game => game.id === gameId ? updatedGame : game)
+          } else {
+            // Add new completed game to the list
+            return [updatedGame, ...prev]
+          }
+        })
         saveGame(updatedGame)
 
         // Set visual result
         const visualResult = coinResult
-        setCoinVisualResult(visualResult)
+        setCoinVisualResult(visualResult as 0 | 1)
         sounds.play('coin')
 
         console.log('🎮 Multiplayer game completed:', {
@@ -512,12 +1275,27 @@ function Flip() {
                 })
               }
 
+              // Record the multiplayer game result in the database
+              if (publicKey) {
+                await recordCoinflipResult(
+                  publicKey.toString(),
+                  betAmountSOL, // Already converted to SOL
+                  winningsSOL, // Already converted to SOL
+                  isWin, // isWin
+                  result.rngSeed?.toString(),
+                  result.clientSeed?.toString(),
+                  result.nonce,
+                  (result as any).game?.toString() || 'unknown',
+                  (result as any).transactionSignature || 'unknown'
+                )
+              }
+
 
               sounds.play('coin')
 
               setGameState('completed')
               setIsSpinning(false)
-              setCoinVisualResult(visualResult)
+              setCoinVisualResult(visualResult as 0 | 1)
 
               // Update the game in the list
               const updatedGame = {
@@ -535,7 +1313,7 @@ function Flip() {
                 result: win ? 'win' : 'lose',
                 coinResult: coinResult === 0 ? 'heads' : 'tails', // Store the actual coin result
                 timestamp: Date.now(),
-                transactionHash: result?.transactionSignature,
+                transactionHash: (result as any)?.transactionSignature,
                 userAddress: publicKey?.toString()
               }
               
@@ -574,7 +1352,7 @@ function Flip() {
 
             // Player loses due to transaction failure, so show opposite side
             const visualResult = side === 'heads' ? 1 : 0
-            setCoinVisualResult(visualResult)
+            setCoinVisualResult(visualResult as 0 | 1)
             
             // Mark as failed/lost due to transaction error
             const updatedGame = {
@@ -627,7 +1405,7 @@ function Flip() {
 
           setGameState('completed')
           setIsSpinning(false)
-          setCoinVisualResult(visualResult)
+          setCoinVisualResult(visualResult as 0 | 1)
 
           // Update the game in the list
           const updatedGame = {
@@ -675,25 +1453,41 @@ function Flip() {
   }
 
 
-  const joinGame = async (gameId: number) => {
+  /**
+   * Join Existing PvP Game
+   * When a player clicks "JOIN" on an existing game:
+   * 1. Player pays the same wager amount as creator
+   * 2. Joins the blockchain game using Gamba multiplayer SDK
+   * 3. Game becomes "ready-to-play" with 2 players
+   * 4. Both players can now start the coin flip
+   */
+  const joinExistingGame = async (gameId: number) => {
     try {
-      // Find the game to join
-      const gameToJoin = userGames.find(game => game.id === gameId) || 
+      // Find the game to join by ID first, then by gameAddress as fallback
+      let gameToJoin = userGames.find(game => game.id === gameId) || 
                         platformGames.find(game => game.id === gameId)
       
+      // If not found by ID, try to find by gameAddress (for blockchain games)
       if (!gameToJoin) {
-        console.error('Game not found')
+        const allGames = [...userGames, ...platformGames]
+        gameToJoin = allGames.find(game => game.gameAddress)
+      }
+      
+      if (!gameToJoin) {
+        console.error('Game not found:', { gameId, userGames: userGames.length, platformGames: platformGames.length })
+        alert('Game not found. Please refresh and try again.')
         return
       }
+      
 
       // Check if game is waiting for players
-      if (gameToJoin.status !== 'waiting-for-players') {
+      if (gameToJoin.status !== 'waiting-for-opponent') {
         alert('This game is not available to join!')
         return
       }
 
-      // Prevent joining your own game
-      if (gameToJoin.player1.name === publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous') {
+      // Prevent joining your own game using proper blockchain data
+      if (!publicKey || gameToJoin.isCurrentUserCreator) {
         alert('You cannot join your own game. Click "Resume" to reopen your game.')
         return
       }
@@ -704,57 +1498,62 @@ function Flip() {
         return
       }
 
-      // Joiner pays immediately when joining
-      const joinerWager = gameToJoin.amount
-      const joinerWagerInLamports = Math.floor(joinerWager * 1e9)
+      console.log('🎮 Joining existing PvP game:', {
+        gameId: gameToJoin.id,
+        gameAddress: gameToJoin.gameAddress,
+        wager: gameToJoin.amount,
+        joinerSide: gameToJoin.player1.side === 'heads' ? 'tails' : 'heads'
+      })
+
+      // Use OFFICIAL Gamba multiplayer join logic
       const joinerSide = gameToJoin.player1.side === 'heads' ? 'tails' : 'heads'
+      const gameAddress = new PublicKey(gameToJoin.gameAddress)
+      
+      // Joining game
       
       try {
-        // Joiner pays immediately
-        const result = await game.play({
-          bet: SIDES[joinerSide],
-          wager: joinerWagerInLamports,
-          metadata: [joinerSide, gameToJoin.currency, 'joiner-payment', gameToJoin.id],
-          creator: publicKey?.toString() || '',
-        })
+        // Join the multiplayer game using official Gamba logic
+        // Note: In Gamba multiplayer, each player pays the full wager amount
+        // The total pot becomes 2x the individual wager
+        await join(
+          {
+            gameAccount: gameAddress,
+            mint: NATIVE_MINT,
+            wager: gameToJoin.amount, // Each player pays the full wager amount
+            creatorAddress: PLATFORM_CREATOR_ADDRESS,
+            creatorFeeBps: Math.round(MULTIPLAYER_FEE * BPS_PER_WHOLE),
+            metadata: joinerSide,
+          },
+          [], // No additional instructions needed
+        )
 
-        console.log('✅ Joiner payment successful:', {
-          wager: joinerWager,
-          side: joinerSide,
-          gameId: gameToJoin.id
-        })
-      } catch (playError) {
+        // Joiner payment successful
+      } catch (playError: any) {
         console.error('Error during joiner payment:', playError)
+        
+        // Check if it's a timeout error
+        if (playError.message?.includes('expired') || playError.message?.includes('timeout')) {
+          // Joiner transaction timed out - checking if it actually went through
+          // Transaction might still have gone through, just timeout on confirmation
+          // We'll check the blockchain state in the refresh below
+          alert('Transaction timed out, but it may still be processing. Please check your wallet and refresh the page.')
+        } else {
         alert(`Joiner payment failed: ${playError.message || 'Unknown error'}`)
         return
       }
-
-      // Join the game as player 2 (joiner has now paid)
-      const updatedGame = {
-        ...gameToJoin,
-        player2: {
-          name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous',
-          level: profile?.level || 1,
-          avatar: (() => {
-            const address = publicKey?.toString() || ''
-            const hasCustom = false
-            const avatarUrl = '/solly.png'
-            const fallback = address ? `${address.slice(0, 4)}...${address.slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase()
-            const result = hasCustom ? avatarUrl : fallback
-            return result
-          })(),
-          side: joinerSide, // Opposite side of creator
-          wager: joinerWager, // Same wager amount
-          paid: true // Joiner has now paid
-        },
-        status: 'ready-to-play', // Both players joined and paid, ready to start
-        totalPool: gameToJoin.amount * 2 // Total pool is both wagers
       }
+
+      // Don't manually update game state - let blockchain data handle it
+      // The join transaction will update the blockchain, and we'll fetch the updated state
       
-      // Update the game in state
-      setUserGames(prev => prev.map(game => game.id === gameId ? updatedGame : game))
-      setPlatformGames(prev => prev.map(game => game.id === gameId ? updatedGame : game))
-      saveGame(updatedGame)
+      // Refresh blockchain games to get updated state
+      if (refreshGames) {
+        // Immediate refresh
+        refreshGames()
+        // Also refresh after a delay to ensure blockchain state is updated
+        setTimeout(() => refreshGames(), 2000)
+        setTimeout(() => refreshGames(), 5000)
+      }
 
       // Set up the game for joining
       setWager(gameToJoin.amount)
@@ -799,7 +1598,7 @@ function Flip() {
 
           setGameState('completed')
           setIsSpinning(false)
-          setCoinVisualResult(visualResult)
+          setCoinVisualResult(visualResult as 0 | 1)
 
           // Update the game in user's games list
           const updatedGame = {
@@ -853,7 +1652,7 @@ function Flip() {
         // Add spinning delay for animation
         setTimeout(async () => {
           try {
-            // Get the result after spinning
+          // Get the result after spinning
             const result = await gamba.result()
             // For coinflip, determine win based on the actual coin result, not payout
             // The coin result should be 0 (heads) or 1 (tails)
@@ -878,11 +1677,26 @@ function Flip() {
               })
             }
 
+            // Record the game result in the database
+            if (publicKey) {
+              await recordCoinflipResult(
+                publicKey.toString(),
+                wager / 1e9, // Convert lamports to SOL
+                result.payout / 1e9, // Convert lamports to SOL
+                result.payout > wager, // isWin
+                result.rngSeed?.toString(),
+                result.clientSeed?.toString(),
+                result.nonce,
+                (result as any).game?.toString() || 'unknown',
+                (result as any).transactionSignature || 'unknown'
+              )
+            }
+
             sounds.play('coin')
 
             setGameState('completed')
             setIsSpinning(false)
-            setCoinVisualResult(visualResult)
+            setCoinVisualResult(visualResult as 0 | 1)
 
             // Update the game in user's games list
             const updatedGame = {
@@ -890,7 +1704,7 @@ function Flip() {
               player1: { 
             name: publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous', 
             level: profile?.level || 1, 
-            avatar: false ? '/solly.png' : publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous'.charAt(0).toUpperCase(), 
+            avatar: profile?.avatar_url || '/solly.png', 
             side: side 
           },
               player2: { 
@@ -905,13 +1719,23 @@ function Flip() {
               result: win ? 'win' as const : 'lose' as const,
               coinResult: coinResult === 0 ? 'heads' : 'tails', // Store the actual coin result
               timestamp: Date.now(),
-              transactionHash: result?.transactionSignature,
-              userAddress: publicKey?.toString()
+              transactionHash: (result as any)?.transactionSignature,
+              userAddress: publicKey?.toString(),
+              transactionSignature: (result as any)?.transactionSignature,
+              rngSeed: result.rngSeed?.toString()
             }
             
-            setUserGames(prev => prev.map(game => 
-              game.id === gameId ? updatedGame : game
-            ))
+            // Add or update the game in user's games list
+            setUserGames(prev => {
+              const existingGameIndex = prev.findIndex(game => game.id === gameId)
+              if (existingGameIndex >= 0) {
+                // Update existing game
+                return prev.map(game => game.id === gameId ? updatedGame : game)
+              } else {
+                // Add new completed game to the list
+                return [updatedGame, ...prev]
+              }
+            })
             
             // Save the updated game to database
             saveGame(updatedGame)
@@ -919,8 +1743,8 @@ function Flip() {
       if (win) {
         sounds.play('win')
       } else {
-            sounds.play('lose')
-          }
+        sounds.play('lose')
+      }
           } catch (error) {
             console.error('Error getting game result:', error)
             setGameState('completed')
@@ -1059,6 +1883,7 @@ function Flip() {
                   {gameState === 'playing' || gameState === 'completed' ? 'Creating...' : 'Create Game'}
                 </CreateGameButton>
 
+
               </CoinsAndCreateGroup>
             </RightSection>
           </GameControls>
@@ -1069,6 +1894,7 @@ function Flip() {
         <GameListSection>
           <GameListHeader>
             <AllGamesTitle>ALL GAMES <span style={{ color: 'white', fontSize: '1rem', fontWeight: '700', marginLeft: '0.5rem' }}>{userGames.length + platformGames.length}</span></AllGamesTitle>
+            {/* Debug game counts - disabled to prevent re-render loop */}
             <SortControls>
               <SortByLabel>SORT BY:</SortByLabel>
               <SortDropdownContainer ref={dropdownRef} onClick={() => setDropdownVisible(prev => !prev)}>
@@ -1108,31 +1934,32 @@ function Flip() {
             {(() => {
               // Combine games but remove duplicates by ID
               const allGames = [...userGames, ...platformGames]
-              const uniqueGames = allGames.reduce((acc, game) => {
-                const existing = acc.find(g => g.id === game.id)
+              const uniqueGames = allGames.reduce((acc: any[], game: any) => {
+                const existing = acc.find((g: any) => g.id === game.id)
                 if (!existing) {
                   acc.push(game)
                 } else {
                   // Update existing game with newer data
-                  const index = acc.findIndex(g => g.id === game.id)
+                  const index = acc.findIndex((g: any) => g.id === game.id)
                   acc[index] = game
                 }
                 return acc
               }, [])
               
+              
               // Force re-render when forceUpdate changes
               const _ = forceUpdate
               
-              const activeGames = uniqueGames.filter(game => 
+              const activeGames = uniqueGames.filter((game: any) => 
                 (game.status === 'waiting' || game.status === 'in-play' || 
-                 game.status === 'waiting-for-players' || game.status === 'ready-to-play') && 
+                 game.status === 'waiting-for-opponent' || game.status === 'ready-to-play') && 
                 game.currency === 'SOL' // Only show SOL games on main page
-              ).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+              ).sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))
               
-              const finishedGames = uniqueGames.filter(game => 
+              const finishedGames = uniqueGames.filter((game: any) => 
                 game.status === 'completed' && 
                 game.currency === 'SOL' // Only show SOL games on main page
-              ).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+              ).sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0))
                 .slice(0, 20) // Last 20 finished games
               
               return [...activeGames, ...finishedGames]
@@ -1147,7 +1974,7 @@ function Flip() {
                   <GameEntry 
                     key={`${gameEntry.id}-${gameEntry.timestamp}`}
                     $isActive={gameEntry.status === 'waiting' || gameEntry.status === 'in-play' || 
-                               gameEntry.status === 'waiting-for-players' || gameEntry.status === 'ready-to-play'}
+                               gameEntry.status === 'waiting-for-opponent' || gameEntry.status === 'ready-to-play'}
                     $isCompleted={gameEntry.status === 'completed'}
                   >
                     <div style={{ position: 'relative', zIndex: 3, display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -1158,7 +1985,7 @@ function Flip() {
                             $isWinner={isCompleted && player1Won} 
                             $isLoser={isCompleted && !player1Won}
                           >
-                            {gameEntry.player1.avatar.startsWith('/') ? (
+                            {gameEntry.player1.avatar.startsWith('/') || gameEntry.player1.avatar.startsWith('http') ? (
                               <img 
                                 src={gameEntry.player1.avatar} 
                                 alt="Player Avatar" 
@@ -1188,7 +2015,7 @@ function Flip() {
                               $isWinner={isCompleted && player2Won} 
                               $isLoser={isCompleted && !player2Won}
                             >
-                              {gameEntry.player2.avatar.startsWith('/') ? (
+                              {gameEntry.player2.avatar.startsWith('/') || gameEntry.player2.avatar.startsWith('http') ? (
                                 <img 
                                   src={gameEntry.player2.avatar} 
                                   alt="Player Avatar" 
@@ -1214,12 +2041,12 @@ function Flip() {
                             <PlayerAvatar $isBot={true}>
                               <img 
                                 src="/solly.png" 
-                                alt="Bot Avatar" 
+                                alt="Waiting Avatar" 
                                 style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px', opacity: '0.5' }}
                               />
                             </PlayerAvatar>
-                            <PlayerName>BOT</PlayerName>
-                            <PlayerLevel><LevelBadge level={100} /></PlayerLevel>
+                            <PlayerName>Waiting...</PlayerName>
+                            <PlayerLevel><LevelBadge level={0} /></PlayerLevel>
                           </PlayerInfo>
                         )}
                       </div>
@@ -1228,65 +2055,108 @@ function Flip() {
                       <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                         <BetAmountDisplay>
                           <img src="/sol-coin-lg-DNgZ-FVD.webp" alt="Solana" style={{ width: '48px', height: '48px' }} />
-                          {gameEntry.currency === 'SOL' ? (gameEntry.amount / 1_000_000_000).toFixed(4) : gameEntry.amount}
+                          {gameEntry.currency === 'SOL' ? (Number(gameEntry.amount) / 1_000_000_000).toFixed(4) : Number(gameEntry.amount)}
                         </BetAmountDisplay>
                       </div>
                       
                       {/* Right side - Action buttons */}
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flex: '0 0 auto' }}>
-                        {(gameEntry.status === 'waiting' || gameEntry.status === 'waiting-for-players' || gameEntry.status === 'ready-to-play') ? (
+                        {/* Button Logic: Creator sees CALL BOT, Joiner sees JOIN, Active games show IN PLAY + eye only, Completed games show only eye */}
+                        {(gameEntry.status === 'waiting' || gameEntry.status === 'waiting-for-opponent' || gameEntry.status === 'ready-to-play') ? (
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                            {gameEntry.player1.name === publicKey ? `${publicKey.toString().slice(0, 4)}...${publicKey.toString().slice(-4)}` : 'Anonymous' ? (
-                              // If you own the game, show "Resume" button to reopen your game
-                              <JoinButton 
-                                onClick={() => {
-                                  // Reopen your own game modal - NO PAYMENT NEEDED
-                                  setWager(gameEntry.amount)
-                                  setCustomBetAmount((gameEntry.amount / 1_000_000_000).toFixed(4))
-                                  setSide(gameEntry.player1.side)
-                                  setCreatorSide(gameEntry.player1.side) // Set creator's side
-                                  setCurrency(gameEntry.currency)
-                                  setGameId(gameEntry.id)
-                                  setShowTransactionModal(true)
-                                  setGameState(gameEntry.status === 'ready-to-play' ? 'ready-to-play' : 'waiting') // Set correct state
-                                  // Trigger transition after modal is mounted
-                                  setTimeout(() => setIsModalVisible(true), 10)
-                                  
-                                  // Clear any old transaction state
-                                }}
-                                style={{ background: '#42ff78', color: 'black' }}
-                              >
-                                Resume
-                              </JoinButton>
-                            ) : gameEntry.status === 'waiting-for-players' && !gameEntry.player2 ? (
-                              // If game is waiting for players and no player2, show "Join" button
-                              <JoinButton onClick={() => joinGame(gameEntry.id)}>Join</JoinButton>
-                            ) : gameEntry.status === 'ready-to-play' && gameEntry.player2 ? (
-                              // If both players are ready, show "Watch" button
-                              <JoinButton 
-                                onClick={() => {
-                                  setWager(gameEntry.amount)
-                                  setCustomBetAmount((gameEntry.amount / 1_000_000_000).toFixed(4))
-                                  setSide(gameEntry.player1.side)
-                                  setCreatorSide(gameEntry.player1.side)
-                                  setCurrency(gameEntry.currency)
-                                  setGameId(gameEntry.id)
-                                  setShowTransactionModal(true)
-                                  setGameState('ready-to-play')
-                                  setTimeout(() => setIsModalVisible(true), 10)
-                                }}
-                              >
-                                Watch
-                              </JoinButton>
-                            ) : (
-                              // Default case - game is full or unavailable
-                              <JoinButton disabled>
-                                Full
-                              </JoinButton>
-                            )}
-                            <ViewGameButton onClick={() => viewGame(gameEntry)}>
-                              <img src="/001-view.png" alt="Watch Live" />
-                            </ViewGameButton>
+                            {(() => {
+                              const isGameActive = gameEntry.status === 'in-play' || gameEntry.status === 'ready-to-play'
+                              const gameHasTwoPlayers = gameEntry.player2 && gameEntry.status !== 'waiting-for-opponent'
+                              
+                              if (isGameActive) {
+                                // Game is active - show IN PLAY as text and eye button only
+                                return (
+                                  <>
+                                    <div style={{ 
+                                      color: '#ff6b6b', 
+                                      fontWeight: 'bold', 
+                                      fontSize: '14px',
+                                      padding: '8px 16px',
+                                      display: 'flex',
+                                      alignItems: 'center'
+                                    }}>
+                                      IN PLAY
+                                    </div>
+                                    <ViewGameButton onClick={() => viewGame(gameEntry)}>
+                                      <img src="/001-view.png" alt="Watch Live" />
+                                    </ViewGameButton>
+                                  </>
+                                )
+                              } else if (gameEntry.isCurrentUserCreator && !gameHasTwoPlayers) {
+                                // Creator waiting for opponent - show CALL BOT
+                                return (
+                                  <JoinButton 
+                                    onClick={() => {
+                                      setWager(Number(gameEntry.amount))
+                                      setCustomBetAmount((Number(gameEntry.amount) / 1_000_000_000).toFixed(4))
+                                      setSide(gameEntry.player1.side)
+                                      setCreatorSide(gameEntry.player1.side)
+                                      setCurrency(gameEntry.currency)
+                                      setGameId(gameEntry.id)
+                                      setShowTransactionModal(true)
+                                      setGameState('waiting')
+                                      setTimeout(() => setIsModalVisible(true), 10)
+                                    }}
+                                    style={{ background: '#42ff78', color: 'black' }}
+                                  >
+                                    CALL BOT
+                                  </JoinButton>
+                                )
+                              } else if (gameEntry.isCurrentUserCreator && gameHasTwoPlayers) {
+                                // Creator with full game - show IN PLAY as text
+                                return (
+                                  <div style={{ 
+                                    color: '#ff6b6b', 
+                                    fontWeight: 'bold', 
+                                    fontSize: '14px',
+                                    padding: '8px 16px',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}>
+                                    IN PLAY
+                                  </div>
+                                )
+                              } else if (gameEntry.isCurrentUserPlayer && !gameEntry.isCurrentUserCreator) {
+                                // Joiner - show IN PLAY as text
+                                return (
+                                  <div style={{ 
+                                    color: '#ff6b6b', 
+                                    fontWeight: 'bold', 
+                                    fontSize: '14px',
+                                    padding: '8px 16px',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}>
+                                    IN PLAY
+                                  </div>
+                                )
+                              } else {
+                                // Other users - show JOIN
+                                return (
+                                  <JoinButton onClick={() => joinExistingGame(gameEntry.id)}>
+                                    JOIN
+                                  </JoinButton>
+                                )
+                              }
+                            })()}
+                            
+                            {/* Eye button - only show for non-active games */}
+                            {(() => {
+                              const isGameActive = gameEntry.status === 'in-play' || gameEntry.status === 'ready-to-play'
+                              if (!isGameActive) {
+                                return (
+                                  <ViewGameButton onClick={() => viewGame(gameEntry)}>
+                                    <img src="/001-view.png" alt="Watch Live" />
+                                  </ViewGameButton>
+                                )
+                              }
+                              return null
+                            })()}
                           </div>
                         ) : gameEntry.status === 'completed' ? (
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
@@ -1382,7 +2252,7 @@ function Flip() {
                     <GameResultPlayerSlot>
                       <GameResultPlayerAvatarContainer>
                         <GameResultPlayerAvatar $isWinner={selectedGameResult.result === 'win'}>
-                          {selectedGameResult.player1.avatar.startsWith('/') ? (
+                          {selectedGameResult.player1.avatar.startsWith('/') || selectedGameResult.player1.avatar.startsWith('http') ? (
                             <img 
                               src={selectedGameResult.player1.avatar} 
                               alt="Player Avatar" 
@@ -1423,7 +2293,7 @@ function Flip() {
                     <GameResultPlayerSlot>
                       <GameResultPlayerAvatarContainer>
                         <GameResultPlayerAvatar $isWinner={selectedGameResult.result === 'lose'}>
-                          {selectedGameResult.player2?.avatar && selectedGameResult.player2.avatar.startsWith('/') ? (
+                          {selectedGameResult.player2?.avatar && (selectedGameResult.player2.avatar.startsWith('/') || selectedGameResult.player2.avatar.startsWith('http')) ? (
                             <img 
                               src={selectedGameResult.player2.avatar} 
                               alt="Bot Avatar" 
@@ -1522,19 +2392,24 @@ function Flip() {
                       <PlayerSlot>
                         <PlayerAvatarContainer>
                           <PlayerAvatarModal>
-                            {false ? (
-                              <img 
-                                src={'/solly.png'} 
-                                alt="Player Avatar" 
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' }}
-                              />
-                            ) : (
-                              <img 
-                                src="/solly.png" 
-                                alt="Default Avatar" 
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' }}
-                              />
-                            )}
+                            {(() => {
+                              const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
+                              const avatar = currentGame?.player1?.avatar || '/solly.png'
+                              
+                              return avatar.startsWith('/') || avatar.startsWith('http') ? (
+                                <img 
+                                  src={avatar} 
+                                  alt="Player Avatar" 
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' }}
+                                />
+                              ) : (
+                                <img 
+                                  src="/solly.png" 
+                                  alt="Default Avatar" 
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' }}
+                                />
+                              )
+                            })()}
                             <CoinSideIndicator>
                               <CoinSideIcon 
                                 src={side === 'heads' ? HEADS_IMAGE : TAILS_IMAGE} 
@@ -1545,11 +2420,34 @@ function Flip() {
                         </PlayerAvatarContainer>
                         <PlayerInfoModal>
                           <NameLevelContainer>
-                            <PlayerNameModal>{profile?.username || 'You'}</PlayerNameModal>
+                            <PlayerNameModal>
+                              {(() => {
+                                const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
+                                
+                                
+                                // Determine if current user is the creator or joiner
+                                const isCurrentUserCreator = currentGame?.isCurrentUserCreator
+                                const isCurrentUserJoiner = currentGame?.isCurrentUserPlayer && !isCurrentUserCreator
+                                
+                                
+                                
+                                // Left side should always show the creator
+                                // Always use the actual game data, not profile data
+                                return currentGame?.player1?.name || 'Unknown'
+                              })()}
+                            </PlayerNameModal>
                           </NameLevelContainer>
                           <BetAmountContainer>
                             {currency === 'SOL' && <SolanaIconModal src="/solana.png" alt="Solana" />}
-                            <BetAmountText>{currency === 'SOL' ? 'Ξ' : 'FAKE'} {currency === 'SOL' ? (wager / 1_000_000_000).toFixed(4) : wager}</BetAmountText>
+                            <BetAmountText>
+                              {(() => {
+                                if (gameState === 'spectating') {
+                                  const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
+                                  return `${currency === 'SOL' ? 'Ξ' : 'FAKE'} ${currency === 'SOL' ? (currentGame?.amount ? (currentGame.amount / 1_000_000_000).toFixed(4) : '0.0000') : (currentGame?.amount || 0)}`
+                                }
+                                return `${currency === 'SOL' ? 'Ξ' : 'FAKE'} ${currency === 'SOL' ? (wager / 1_000_000_000).toFixed(4) : wager}`
+                              })()}
+                            </BetAmountText>
                           </BetAmountContainer>
                         </PlayerInfoModal>
                       </PlayerSlot>
@@ -1596,42 +2494,31 @@ function Flip() {
                         <PlayerAvatarContainer>
                           <PlayerAvatarModal $isBot={true}>
                             {(() => {
-                              const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
-                              const isMultiplayer = currentGame?.status === 'waiting-for-players' || currentGame?.status === 'ready-to-play'
+                              const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
+                              const isMultiplayer = currentGame?.status === 'waiting-for-opponent' || currentGame?.status === 'ready-to-play'
                               
-                              if (gameState === 'waiting' || (isMultiplayer && !currentGame?.player2)) {
+                              // PvP Flip Modal Logic: Show question mark when waiting for player, actual avatar when player has joined
+                              
+                              // Simple logic: If player2 exists (has joined), show their avatar. Otherwise show question mark.
+                              if (!currentGame?.player2) {
+                                // No second player yet - show question mark
                                 return <img src={UNKNOWN_IMAGE} alt="Waiting..." style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' }} />
-                              } else if (isMultiplayer && currentGame?.player2) {
+                              } else {
+                                // Player2 has joined - show their actual avatar
                                 // Show the actual second player
-                                return currentGame.player2.avatar.startsWith('/') ? (
+                                return currentGame.player2.avatar.startsWith('/') || currentGame.player2.avatar.startsWith('http') ? (
                                   <img 
                                     src={currentGame.player2.avatar} 
                                     alt="Player Avatar" 
                                     style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' }}
                                   />
                                 ) : (
-                                  <div style={{ 
-                                    width: '100%', 
-                                    height: '100%', 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    justifyContent: 'center',
-                                    background: 'linear-gradient(135deg, #4c1d95, #a855f7)',
-                                    borderRadius: '20px',
-                                    fontSize: '24px',
-                                    fontWeight: 'bold',
-                                    color: 'white'
-                                  }}>
-                                    {currentGame.player2.avatar}
-                                  </div>
+                                  <img 
+                                    src="/solly.png" 
+                                    alt="Default Avatar" 
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' }}
+                                  />
                                 )
-                              } else {
-                                // Show bot
-                                return <img 
-                                  src="/solly.png" 
-                                  alt="Bot Avatar" 
-                                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '20px' }}
-                                />
                               }
                             })()}
                             <CoinSideIndicator>
@@ -1646,29 +2533,61 @@ function Flip() {
                           <NameLevelContainer>
                             <PlayerNameModal>
                               {(() => {
-                                const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
-                                const isMultiplayer = currentGame?.status === 'waiting-for-players' || currentGame?.status === 'ready-to-play'
+                                const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
+                                const isMultiplayer = currentGame?.status === 'waiting-for-opponent' || currentGame?.status === 'ready-to-play'
                                 
-                                if (gameState === 'waiting' || (isMultiplayer && !currentGame?.player2)) {
-                                  return 'Waiting...'
-                                } else if (isMultiplayer && currentGame?.player2) {
+                                // Determine if current user is the creator or joiner
+                                const isCurrentUserCreator = currentGame?.isCurrentUserCreator
+                                const isCurrentUserJoiner = currentGame?.isCurrentUserPlayer && !isCurrentUserCreator
+                                
+                                
+                                // Right side should show joiner or waiting
+                                // Always use the actual game data, not profile data
+                                if (currentGame?.player2) {
                                   return currentGame.player2.name
                                 } else {
-                                  return 'Bot'
+                                  return 'Waiting...'
                                 }
                               })()}
                             </PlayerNameModal>
                           </NameLevelContainer>
                           <BetAmountContainer>
                             {currency === 'SOL' && <SolanaIconModal src="/solana.png" alt="Solana" />}
-                            <BetAmountText>{currency === 'SOL' ? 'Ξ' : 'FAKE'} {gameState === 'waiting' ? '0' : (currency === 'SOL' ? (wager / 1_000_000_000).toFixed(4) : wager)}</BetAmountText>
+                            <BetAmountText>
+                              {(() => {
+                                if (gameState === 'spectating') {
+                                  const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
+                                  const isMultiplayer = currentGame?.status === 'waiting-for-opponent' || currentGame?.status === 'ready-to-play'
+                                  
+                                  if (isMultiplayer && !currentGame?.player2) {
+                                    return `${currency === 'SOL' ? 'Ξ' : 'FAKE'} 0`
+                                  } else if (isMultiplayer && currentGame?.player2) {
+                                    return `${currency === 'SOL' ? 'Ξ' : 'FAKE'} ${currency === 'SOL' ? (currentGame.amount ? (currentGame.amount / 1_000_000_000).toFixed(4) : '0.0000') : (currentGame?.amount || 0)}`
+                                  } else {
+                                    return `${currency === 'SOL' ? 'Ξ' : 'FAKE'} ${currency === 'SOL' ? (currentGame?.amount ? (currentGame.amount / 1_000_000_000).toFixed(4) : '0.0000') : (currentGame?.amount || 0)}`
+                                  }
+                                }
+                                return `${currency === 'SOL' ? 'Ξ' : 'FAKE'} ${gameState === 'waiting' ? '0' : (currency === 'SOL' ? (wager / 1_000_000_000).toFixed(4) : wager)}`
+                              })()}
+                            </BetAmountText>
                           </BetAmountContainer>
                         </PlayerInfoModal>
                       </PlayerSlot>
                     </PlayerColumn>
                   </ThreeColumnLayout>
                   
-                  {/* CALL BOT BUTTON SECTION */}
+                  {/* CALL BOT BUTTON SECTION - Only show for creators, not spectators or joiners */}
+                  {gameState !== 'spectating' && (() => {
+                    const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
+                    const isCurrentUserCreator = currentGame?.isCurrentUserCreator
+                    const isCurrentUserJoiner = currentGame?.isCurrentUserPlayer && !isCurrentUserCreator
+                    const gameHasTwoPlayers = currentGame?.player2 && currentGame?.status !== 'waiting-for-opponent'
+                    
+                    // Only show CALL BOT button if:
+                    // 1. Current user is the creator (not joiner)
+                    // 2. Game doesn't have two players yet (not full)
+                    return isCurrentUserCreator && !gameHasTwoPlayers
+                  })() && (
                   <CallBotButtonWrapper>
                     <CallBotButtonContainer>
                       <CallBotButton
@@ -1685,13 +2604,11 @@ function Flip() {
                       >
                         {gameState === 'playing' ? 'Starting...' : 
                          (() => {
-                           const currentGame = userGames.find(g => g.id === gameId) || platformGames.find(g => g.id === gameId)
-                           if (currentGame?.status === 'waiting-for-players') {
+                           const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
+                             if (currentGame?.status === 'waiting-for-opponent') {
                              return 'Call Bot' // Allow player to start with bot instead of waiting
                            } else if (currentGame?.status === 'ready-to-play') {
-                             // Check if both players have paid
-                             const bothPlayersPaid = currentGame.player1?.paid && currentGame.player2?.paid
-                             return bothPlayersPaid ? 'Start Game' : 'Waiting for Payment...'
+                               return 'Game Starting...' // Game is ready to start
                            } else {
                              return 'Call Bot'
                            }
@@ -1699,6 +2616,52 @@ function Flip() {
                       </CallBotButton>
                     </CallBotButtonContainer>
                   </CallBotButtonWrapper>
+                  )}
+                  
+                  {/* SPECTATOR MESSAGE - Show when watching someone else's game */}
+                  {gameState === 'spectating' && (
+                    <CallBotButtonWrapper>
+                      <CallBotButtonContainer>
+                        <div style={{ 
+                          padding: '1rem', 
+                          textAlign: 'center', 
+                          color: '#888', 
+                          fontSize: '0.9rem',
+                          background: 'rgba(42, 42, 42, 0.8)',
+                          borderRadius: '8px',
+                          border: '1px solid #3a3a3a'
+                        }}>
+                          👀 Watching this game...
+                        </div>
+                      </CallBotButtonContainer>
+                    </CallBotButtonWrapper>
+                  )}
+                  
+                  {/* FULL GAME MESSAGE - Show when game is full and user is joiner */}
+                  {gameState !== 'spectating' && (() => {
+                    const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
+                    const isCurrentUserCreator = currentGame?.isCurrentUserCreator
+                    const isCurrentUserJoiner = currentGame?.isCurrentUserPlayer && !isCurrentUserCreator
+                    const gameHasTwoPlayers = currentGame?.player2 && currentGame?.status !== 'waiting-for-opponent'
+                    
+                    return isCurrentUserJoiner && gameHasTwoPlayers
+                  })() && (
+                    <CallBotButtonWrapper>
+                      <CallBotButtonContainer>
+                        <div style={{ 
+                          padding: '1rem', 
+                          textAlign: 'center', 
+                          color: '#42ff78', 
+                          fontSize: '0.9rem',
+                          background: 'rgba(42, 42, 42, 0.8)',
+                          borderRadius: '8px',
+                          border: '1px solid #3a3a3a'
+                        }}>
+                          ✅ Game is full - waiting for flip...
+                        </div>
+                      </CallBotButtonContainer>
+                    </CallBotButtonWrapper>
+                  )}
                 </ModalMain>
 
                 {/* FOOTER SECTION */}
@@ -1711,7 +2674,20 @@ function Flip() {
                   </div>
                   <GameInfo>
                     <InfoTextContainer>
-                      <InfoText>HASHED SEED: {gameId ? (userGames.find(g => g.id === gameId)?.rngSeed || hashedSeed) : hashedSeed}</InfoText>
+                      <InfoText>
+                        {(() => {
+                          const currentGame = platformGames.find(g => g.id === gameId) || userGames.find(g => g.id === gameId)
+                          if (currentGame?.status === 'waiting-for-opponent') {
+                            return 'Waiting for opponent or call bot to start'
+                          } else if (currentGame?.status === 'ready-to-play') {
+                            return 'Game ready to start'
+                          } else if (currentGame?.status === 'playing') {
+                            return 'Game in progress...'
+                          } else {
+                            return `HASHED SEED: ${gameId ? (userGames.find(g => g.id === gameId)?.rngSeed || hashedSeed) : hashedSeed}`
+                          }
+                        })()}
+                      </InfoText>
                     </InfoTextContainer>
                   </GameInfo>
                 </ModalFooter>

@@ -62,6 +62,8 @@ interface GameViewModalProps {
     side?: 'heads' | 'tails'
     coinResult?: 'heads' | 'tails' // Add the actual coin result
     timestamp?: number
+    transactionSignature?: string
+    rngSeed?: string
   }
   onClose: () => void
 }
@@ -75,9 +77,9 @@ export function GameViewModal({ gameId, gameData, onClose }: GameViewModalProps)
   
   // Calculate profit/loss for completed games
   const profit = isCompleted && gameData.result === 'win' 
-    ? gameData.amount * 2 - gameData.amount 
+    ? Number(gameData.amount) * 2 - Number(gameData.amount) 
     : isCompleted && gameData.result === 'lose' 
-    ? -gameData.amount 
+    ? -Number(gameData.amount) 
     : 0
 
   return (
@@ -147,7 +149,7 @@ export function GameViewModal({ gameId, gameData, onClose }: GameViewModalProps)
                   </div>
                 )}
                 <div style={{ fontSize: '16px', color: '#42ff78', marginTop: '5px' }}>
-                  {gameData.amount} {gameData.currency}
+                  {Number(gameData.amount)} {gameData.currency}
                 </div>
               </div>
 
@@ -250,21 +252,30 @@ export function GameViewModal({ gameId, gameData, onClose }: GameViewModalProps)
         </Inner>
         
         <ButtonContainer>
-          <button 
-            onClick={() => window.open(`https://explorer.solana.com/tx/${hashseed}`, '_blank')}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#6741ff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}
-          >
-            Verify
-          </button>
+          {isCompleted && (
+            <button 
+              onClick={() => {
+                // Only verify completed games with valid transaction signatures
+                if (gameData.transactionSignature) {
+                  window.open(`https://explorer.solana.com/tx/${gameData.transactionSignature}`, '_blank')
+                } else {
+                  alert('Transaction signature not available for this game')
+                }
+              }}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#6741ff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}
+            >
+              Verify
+            </button>
+          )}
           {isActive && (
             <button 
               onClick={() => {

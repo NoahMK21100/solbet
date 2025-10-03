@@ -225,11 +225,19 @@ export const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
     <ProfileContainer ref={dropdownRef}>
       <ProfileButton onClick={() => setIsOpen(!isOpen)}>
         <ProfileAvatar>
-          <img
-            src="/solly.png"
-            alt="Default Avatar"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
-          />
+          {profile?.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt="Profile Avatar"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+            />
+          ) : (
+            <img
+              src="/solly.png"
+              alt="Default Avatar"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+            />
+          )}
         </ProfileAvatar>
         <ProfileInfo>
           <Username>{userData.username}</Username>

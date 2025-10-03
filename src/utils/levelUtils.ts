@@ -1,35 +1,26 @@
 export type LevelVariant = "gray" | "blue" | "purple" | "pink" | "orange" | "red";
 
 export const getLevelVariant = (level: number): LevelVariant => {
-  console.log('getLevelVariant - input level:', level, 'type:', typeof level);
-  
   if (level >= 1 && level <= 9) {
-    console.log('Returning gray for level:', level);
     return "gray";
   }
   if (level >= 10 && level <= 29) {
-    console.log('Returning blue for level:', level);
     return "blue";
   }
   if (level >= 30 && level <= 39) {
-    console.log('Returning purple for level:', level);
     return "purple";
   }
   if (level >= 40 && level <= 49) {
-    console.log('Returning pink for level:', level);
     return "pink";
   }
   if (level >= 50 && level <= 74) {
-    console.log('Returning orange for level:', level);
     return "orange";
   }
   if (level >= 75 && level <= 100) {
-    console.log('Returning red for level:', level);
     return "red";
   }
   
   // Default to gray for levels outside the defined ranges
-  console.log('Returning default gray for level:', level);
   return "gray";
 };
 

@@ -6,6 +6,7 @@ import { Dropdown } from '../components/Dropdown'
 import { Modal } from '../components/Modal'
 import { POOLS } from '../constants'
 import { useUserStore } from '../hooks/useUserStore'
+import { getSolPrice } from '../utils/priceService'
 
 const StyledToken = styled.div`
   display: flex;
@@ -122,12 +123,11 @@ export default function TokenSelect() {
   const userStore = useUserStore()
   const balance = useTokenBalance()
 
-  // Fetch SOL price for USD conversion
+  // Fetch SOL price using centralized service
   const fetchSolPrice = async () => {
     try {
-      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd')
-      const data = await response.json()
-      setSolPrice(data.solana.usd)
+      const price = await getSolPrice()
+      setSolPrice(price)
     } catch (error) {
       console.error('Failed to fetch SOL price:', error)
     }
@@ -135,7 +135,8 @@ export default function TokenSelect() {
 
   useEffect(() => {
     fetchSolPrice()
-    const priceInterval = setInterval(fetchSolPrice, 30000)
+    // Update price every 5 minutes to match the centralized caching strategy
+    const priceInterval = setInterval(fetchSolPrice, 5 * 60 * 1000)
     return () => clearInterval(priceInterval)
   }, [])
 

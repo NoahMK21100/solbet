@@ -73,10 +73,6 @@ const LevelBadgeText = styled.span<{ $variant: LevelVariant }>`
 export function LevelBadge({ level, variant, className }: LevelBadgeProps) {
   const numericLevel = typeof level === 'string' ? parseInt(level, 10) : level
   const levelVariant = variant || getLevelVariant(numericLevel)
-  
-  // Debug logging
-  console.log('LevelBadge - level:', level, 'numericLevel:', numericLevel, 'variant:', levelVariant)
-  console.log('LevelBadge - levelVariant check:', levelVariant === 'gray', levelVariant === 'red')
 
   return (
     <LevelBadgeContainer $variant={levelVariant} className={className}>

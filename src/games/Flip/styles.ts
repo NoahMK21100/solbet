@@ -625,6 +625,10 @@ export const GameEntry = styled.div<{ $isActive?: boolean; $isCompleted?: boolea
   font-size: 0.875rem;
   font-weight: 500;
   font-family: 'Flama', sans-serif;
+  
+  /* Make completed games more obviously greyed out */
+  opacity: ${props => props.$isCompleted ? 0.7 : 1};
+  filter: ${props => props.$isCompleted ? 'grayscale(0.3)' : 'none'};
   text-shadow: rgba(0, 0, 0, 0.5) 0px 2px;
   cursor: pointer;
   user-select: none;

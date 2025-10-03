@@ -478,7 +478,6 @@ export default function TrollBox({ isMinimized: propIsMinimized = false }: Troll
       if (fetchError) {
         // If table doesn't exist or RLS policy blocks, just show empty chat
         if (fetchError.code === 'PGRST116' || fetchError.code === '42501') {
-          console.log('Chat table not found or RLS policy blocks, showing empty chat')
           setMessages([])
           return
         }
