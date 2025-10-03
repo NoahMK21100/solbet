@@ -495,7 +495,7 @@ export default function Header() {
         <LogoSection>
           <Logo>
             <LogoImage 
-              src="/NewSolbetLogo.png" 
+              src="/SIMPLE_LOGO.png" 
               alt="Solbet Logo"
             />
             <LogoLink to="/">
